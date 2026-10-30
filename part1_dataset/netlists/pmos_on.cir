@@ -1,0 +1,28 @@
+* PMOS ON - single transistor, 22nm MGK, nominal corner (Vg = 0, Vb = VDD)
+
+.include ../../models/22nm_MGK.pm
+
+.options gmin=1e-18 abstol=1e-18 reltol=1e-6 vntol=1e-9
+.temp 27
+
+* Transistor: M<name> drain gate source body model W L
+M1 d g s b pmos W=44n L=22n
+
+* One DC source per terminal (VDD = 0.9 V)
+Vd d 0 DC 0
+Vg g 0 DC 0
+Vs s 0 DC 0.9
+Vb b 0 DC 0.9
+
+.control
+op
+* -i(Vx) = current flowing INTO terminal x of the transistor
+let id = -i(Vd)
+let ig = -i(Vg)
+let is = -i(Vs)
+let ib = -i(Vb)
+let kcl = id + ig + is + ib
+print id ig is ib kcl
+.endc
+
+.end
