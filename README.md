@@ -22,8 +22,11 @@ models/22nm_MGK.pm      # assigned PTM model file
 docs/                   # project specification (DVD_ML_PROJECT.pdf)
 part1_dataset/
   netlists/             # example single-transistor netlists (nmos_on/off, pmos_on/off .cir)
+  spice_utils.py        # build a sample netlist, run ngspice, read back Id, Ig, Is, Ib
+  generate.py           # draw samples and simulate -> data/*.csv
+  validate.py           # KCL check, sanity checks, trend plots -> results/part1/
 data/                   # generated datasets (Part 1 CSVs)
-results/part1/          # Part 1 plots and KCL summary
+results/part1/          # Part 1 plots, KCL summary, validation summary
 ```
 Each later part gets its own `partN_*/` folder and writes its outputs under `results/partN/`.
 
@@ -33,6 +36,30 @@ Requires ngspice (developed with ngspice-42) and Python 3.12.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
+
+## Running Part 1
+```
+.venv/bin/python part1_dataset/generate.py    # ~15 s on 12 cores, writes data/*.csv
+.venv/bin/python part1_dataset/validate.py    # writes results/part1/
+```
+Both scripts use the fixed seeds in `config.py`, so a rerun reproduces byte-identical CSVs.
+`generate.py --cases nmos_on --n 1000` regenerates a single case or a smaller set.
+
+### Dataset notes (for Part 2)
+- **Files:** `data/nmos_on.csv`, `nmos_off.csv`, `pmos_on.csv`, `pmos_off.csv`, 10,000 rows each.
+- **Columns:** `vdd, temp, w, vd, vs, vg, vb, vth0, toxe, ndep, u0, xj` (inputs) and `id, ig, is, ib` (targets).
+- **Units:** SI (V, m, A, m⁻³ for ndep, m²/Vs for u0); `temp` in °C.
+- **Signs:** current flowing *into* the terminal is positive. Signs do change within a case:
+  in the ON cases Id and Is flip in about 50% of rows (whenever Vs > Vd), and in the OFF cases
+  gate leakage is comparable to channel leakage, so Id is not simply −Is.
+- **Range:** |I| spans about 1e-17 to 5e-4 A, so predict log10|I| and the sign separately.
+- **Constant columns:** `vg` and `vb` are fixed per case (equal to `vdd` or 0), so they add no information within a case.
+
+### Validation results
+All checks pass ([results/part1/validation_summary.txt](results/part1/validation_summary.txt)).
+- **KCL:** worst residual |Id+Ig+Is+Ib| / max|I| is 2.7e-4, below the 1e-3 limit (10× below the 1% accuracy target).
+  The residual is a few-fA floor in the BSIM4 model's current bookkeeping: it appears only where every current is in the pA range, and it is unchanged when the solver tolerances are tightened 1000×.
+- **Trends (controlled sweeps at nominal, |Vds| = VDD):** OFF current rises with temperature and falls as |vth0| grows; |Ig| falls as toxe grows.
 
 ## Conventions (fix these before writing code)
 - **Current sign:** current flowing *into* a terminal is positive. The KCL check is then `Id + Ig + Is + Ib ≈ 0`.

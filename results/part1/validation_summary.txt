@@ -1,0 +1,24 @@
+KCL check: |Id+Ig+Is+Ib| / max|I|  (limit 0.001)
+    case  rows  median_rel  p95_rel  max_rel  max_abs_A  pass
+ nmos_on 10000    1.73e-12 3.11e-09 2.68e-04   1.57e-15  True
+nmos_off 10000    6.89e-16 2.89e-15 5.48e-15   6.50e-22  True
+ pmos_on 10000    4.16e-13 6.26e-11 3.03e-07   3.53e-17  True
+pmos_off 10000    5.63e-08 1.99e-06 1.83e-04   6.63e-15  True
+
+Sanity checks
+  nmos_on   PASS
+  nmos_off  PASS
+  pmos_on   PASS
+  pmos_off  PASS
+
+Trend checks (controlled sweeps)
+  |Ioff| vs temp, nmos_off     increasing     PASS
+  |Ioff| vs temp, pmos_off     increasing     PASS
+  |Ioff| vs vth0, nmos_off     decreasing     PASS
+  |Ioff| vs vth0, pmos_off     increasing     PASS
+  |Ig| vs toxe, nmos_on        decreasing     PASS
+  |Ig| vs toxe, nmos_off       decreasing     PASS
+  |Ig| vs toxe, pmos_on        decreasing     PASS
+  |Ig| vs toxe, pmos_off       decreasing     PASS
+
+Overall: KCL PASS, sanity PASS, trends PASS
