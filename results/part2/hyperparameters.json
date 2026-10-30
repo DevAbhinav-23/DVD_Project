@@ -1,0 +1,349 @@
+{
+ "nmos_on/poly_ridge": {
+  "id": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "ig": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "is": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "ib": {
+   "degree": 3,
+   "alpha": 1.0
+  }
+ },
+ "nmos_on/random_forest": {
+  "id": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "ig": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "is": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "ib": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  }
+ },
+ "nmos_on/lightgbm": {
+  "id": {
+   "num_leaves": 15,
+   "max_depth": 6
+  },
+  "ig": {
+   "num_leaves": 15,
+   "max_depth": 6
+  },
+  "is": {
+   "num_leaves": 15,
+   "max_depth": 6
+  },
+  "ib": {
+   "num_leaves": 15,
+   "max_depth": 6
+  }
+ },
+ "nmos_on/mlp": {
+  "id": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "ig": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "is": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "ib": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  }
+ },
+ "nmos_off/poly_ridge": {
+  "id": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "ig": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "is": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "ib": {
+   "degree": 3,
+   "alpha": 1.0
+  }
+ },
+ "nmos_off/random_forest": {
+  "id": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "ig": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "is": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "ib": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  }
+ },
+ "nmos_off/lightgbm": {
+  "id": {
+   "num_leaves": 31
+  },
+  "ig": {
+   "num_leaves": 15,
+   "max_depth": 6
+  },
+  "is": {
+   "num_leaves": 31
+  },
+  "ib": {
+   "num_leaves": 15,
+   "max_depth": 6
+  }
+ },
+ "nmos_off/mlp": {
+  "id": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "ig": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "is": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "ib": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  }
+ },
+ "pmos_on/poly_ridge": {
+  "id": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "ig": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "is": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "ib": {
+   "degree": 3,
+   "alpha": 1.0
+  }
+ },
+ "pmos_on/random_forest": {
+  "id": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "ig": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "is": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "ib": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  }
+ },
+ "pmos_on/lightgbm": {
+  "id": {
+   "num_leaves": 15,
+   "max_depth": 6
+  },
+  "ig": {
+   "num_leaves": 15,
+   "max_depth": 6
+  },
+  "is": {
+   "num_leaves": 15,
+   "max_depth": 6
+  },
+  "ib": {
+   "num_leaves": 15,
+   "max_depth": 6
+  }
+ },
+ "pmos_on/mlp": {
+  "id": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "ig": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "is": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "ib": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  }
+ },
+ "pmos_off/poly_ridge": {
+  "id": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "ig": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "is": {
+   "degree": 3,
+   "alpha": 1.0
+  },
+  "ib": {
+   "degree": 3,
+   "alpha": 1.0
+  }
+ },
+ "pmos_off/random_forest": {
+  "id": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "ig": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "is": {
+   "max_features": 1.0,
+   "min_samples_leaf": 1
+  },
+  "ib": {
+   "max_features": 0.5,
+   "min_samples_leaf": 1
+  }
+ },
+ "pmos_off/lightgbm": {
+  "id": {
+   "num_leaves": 31
+  },
+  "ig": {
+   "num_leaves": 15,
+   "max_depth": 6
+  },
+  "is": {
+   "num_leaves": 31
+  },
+  "ib": {
+   "num_leaves": 63
+  }
+ },
+ "pmos_off/mlp": {
+  "id": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "ig": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "is": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  },
+  "ib": {
+   "hidden_layer_sizes": [
+    64,
+    64,
+    64
+   ],
+   "alpha": 1e-06
+  }
+ }
+}
