@@ -25,8 +25,13 @@ part1_dataset/
   spice_utils.py        # build a sample netlist, run ngspice, read back Id, Ig, Is, Ib
   generate.py           # draw samples and simulate -> data/*.csv
   validate.py           # KCL check, sanity checks, trend plots -> results/part1/
+part2_models/
+  leakage_model.py      # features, log10|I| + sign target, saved CaseModel (load_case_model)
+  train_compare.py      # 4 model families x 4 cases -> comparison table, chosen models, plots
+  learning_curve.py     # chosen model vs training-set size (1k, 2k, 5k, 7k)
 data/                   # generated datasets (Part 1 CSVs)
 results/part1/          # Part 1 plots, KCL summary, validation summary
+results/part2/          # Part 2 tables, plots and the four saved models
 ```
 Each later part gets its own `partN_*/` folder and writes its outputs under `results/partN/`.
 
@@ -60,6 +65,56 @@ All checks pass ([results/part1/validation_summary.txt](results/part1/validation
 - **KCL:** worst residual |Id+Ig+Is+Ib| / max|I| is 2.7e-4, below the 1e-3 limit (10× below the 1% accuracy target).
   The residual is a few-fA floor in the BSIM4 model's current bookkeeping: it appears only where every current is in the pA range, and it is unchanged when the solver tolerances are tightened 1000×.
 - **Trends (controlled sweeps at nominal, |Vds| = VDD):** OFF current rises with temperature and falls as |vth0| grows; |Ig| falls as toxe grows.
+
+## Running Part 2
+```
+.venv/bin/python part2_models/train_compare.py    # ~45 min on 4 cores, writes results/part2/
+.venv/bin/python part2_models/learning_curve.py   # ~40 min, needs train_compare.py first
+```
+`train_compare.py --fast` runs one hyperparameter setting per family as a quick smoke test.
+
+### Method
+- **Split:** 70 / 15 / 15 with `SEEDS["split"]`; row indices saved in `results/part2/splits/`.
+- **Target:** each current is predicted as `sign(I) × 10^y` with `y = log10|I|`. Where a terminal's
+  sign is mixed in the training data (Id and Is), a classifier from the same family predicts it.
+- **Features:** the 12 inputs plus Vds, |Vds|, Vgs, Vgd, Vbs, Vbd, gate and body voltage relative to
+  min/max(Vd, Vs), 1/kT, logs of W, toxe, ndep and u0, and the subthreshold exponents
+  (Vgs − |vth0|)/kT. Columns constant within a case are dropped.
+- **Model types:** degree-2/3 polynomial ridge (baseline), Random Forest, LightGBM, and an MLP
+  (3 × 64 tanh, full-batch L-BFGS). The MLP and ridge are one model with four outputs; the tree
+  models have one model per terminal. XGBoost is also available via `--families xgboost`.
+- **Selection:** per case, the family with the lowest validation mean over terminals of
+  (median + 95th-percentile relative error) / 2. Gradient boosting uses the validation set for early stopping.
+
+### Results
+The MLP wins every case. Validation set, mean over the four terminals (median / 95th-percentile relative error):
+
+| Case | Poly ridge | Random Forest | LightGBM | **MLP** |
+|---|---|---|---|---|
+| NMOS ON | 11.1% / 43% | 12.1% / 54% | 4.1% / 18% | **1.3% / 7.3%** |
+| NMOS OFF | 13.8% / 73% | 5.7% / 37% | 3.3% / 26% | **1.1% / 7.0%** |
+| PMOS ON | 10.2% / 42% | 11.8% / 50% | 3.9% / 17% | **1.3% / 7.1%** |
+| PMOS OFF | 15.4% / 88% | 6.1% / 35% | 3.2% / 21% | **1.2% / 6.7%** |
+
+On the test set the chosen MLPs reach 1.1–1.3% median and 6.5–7.4% 95th-percentile error per
+case, with R² on log10|I| between 0.968 and 0.9999 per terminal (full tables in
+`results/part2/test_metrics.md` and `comparison_table.md`). The largest errors are in Id and Is
+of the OFF cases, where channel and gate leakage are similar in size and partly cancel, so the
+relative error of their difference is large; the sign is right in 98.5–99.6% of those rows.
+
+**Learning curve** (`results/part2/learning_curve.csv`, `plots/learning_curve.png`): 1k training rows
+give 2.0–3.4% median and 28–64% 95th-percentile error, 2k rows already reach 1.2–1.4% median, and from
+5k to 7k both level off (median 1.1–1.4%, 95th percentile 5.9–8.7% at 5k and 6.6–7.4% at 7k; the small
+ups and downs between 5k and 7k are run-to-run noise of the L-BFGS fit). So about 5k samples per case
+is enough; extra SPICE data would buy little with this model.
+
+### Using the models (Parts 3 and 4)
+```python
+sys.path.insert(0, "part2_models")
+from leakage_model import load_case_model
+m = load_case_model("results/part2/models/nmos_off.joblib")
+currents = m.predict(df)   # df with the 12 input columns -> DataFrame id, ig, is, ib in A
+```
 
 ## Conventions (fix these before writing code)
 - **Current sign:** current flowing *into* a terminal is positive. The KCL check is then `Id + Ig + Is + Ib ≈ 0`.
