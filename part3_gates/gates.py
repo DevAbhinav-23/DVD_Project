@@ -1,0 +1,190 @@
+"""Static CMOS gates: topology, SPICE netlists, batched ngspice runs and the leakage formula.
+
+Currents follow the project convention: positive = flowing INTO the transistor terminal.
+Every transistor terminal is wired to its node through its own 0 V source (an ammeter), so
+SPICE reports every terminal current, not only the supply current.
+"""
+import itertools
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "part1_dataset"))
+import config
+from corners import corner_params
+from spice_utils import CURRENTS, MODEL_NAME, model_card
+
+TERMINALS = ["d", "g", "s", "b"]   # same order as CURRENTS = id, ig, is, ib
+
+# Transistors as (name, type, drain, gate, source, body). "0" is ground, "a"/"b" are the inputs.
+# Internal nodes: x between the series NMOS of NAND2, y between the series PMOS of NOR2,
+# nand_out / nor_out = the NAND2 / NOR2 output inside AND2 / OR2.
+GATES = {
+    "inv": [
+        ("mp1", "pmos", "out", "a", "vdd", "vdd"),
+        ("mn1", "nmos", "out", "a", "0", "0"),
+    ],
+    "nand2": [
+        ("mp1", "pmos", "out", "a", "vdd", "vdd"),
+        ("mp2", "pmos", "out", "b", "vdd", "vdd"),
+        ("mn1", "nmos", "out", "a", "x", "0"),
+        ("mn2", "nmos", "x", "b", "0", "0"),
+    ],
+    "nor2": [
+        ("mp1", "pmos", "y", "a", "vdd", "vdd"),
+        ("mp2", "pmos", "out", "b", "y", "vdd"),
+        ("mn1", "nmos", "out", "a", "0", "0"),
+        ("mn2", "nmos", "out", "b", "0", "0"),
+    ],
+    "and2": [
+        ("mp1", "pmos", "nand_out", "a", "vdd", "vdd"),
+        ("mp2", "pmos", "nand_out", "b", "vdd", "vdd"),
+        ("mn1", "nmos", "nand_out", "a", "x", "0"),
+        ("mn2", "nmos", "x", "b", "0", "0"),
+        ("mp3", "pmos", "out", "nand_out", "vdd", "vdd"),
+        ("mn3", "nmos", "out", "nand_out", "0", "0"),
+    ],
+    "or2": [
+        ("mp1", "pmos", "y", "a", "vdd", "vdd"),
+        ("mp2", "pmos", "nor_out", "b", "y", "vdd"),
+        ("mn1", "nmos", "nor_out", "a", "0", "0"),
+        ("mn2", "nmos", "nor_out", "b", "0", "0"),
+        ("mp3", "pmos", "out", "nor_out", "vdd", "vdd"),
+        ("mn3", "nmos", "out", "nor_out", "0", "0"),
+    ],
+}
+
+
+def inputs(gate):
+    return [n for n in ("a", "b") if any(n in fet[2:] for fet in GATES[gate])]
+
+
+def nodes(gate):
+    """Nodes whose voltage SPICE solves for: the output and the internal nodes."""
+    all_nodes = {n for fet in GATES[gate] for n in fet[2:]}
+    return sorted(all_nodes - {"0", "vdd", *inputs(gate)})
+
+
+# The 18 gate-input cases, e.g. ("nand2", "01") means A = 0, B = 1.
+CASES = [(gate, "".join(bits)) for gate in GATES
+         for bits in itertools.product("01", repeat=len(inputs(gate)))]
+
+
+def node_voltages(gate, bits, vdd, solved):
+    """{node: voltage} for every node of the gate. Inputs are exactly 0 or VDD;
+    solved maps each node in nodes(gate) to its (SPICE-recorded) voltage."""
+    volts = {"0": 0.0, "vdd": vdd}
+    volts.update({n: vdd * int(bit) for n, bit in zip(inputs(gate), bits)})
+    volts.update({n: solved[n] for n in nodes(gate)})
+    return volts
+
+
+def leakage(gate, bits, currents, include_inputs=False):
+    """Static current drawn from VDD: the sum of the currents INTO every transistor terminal
+    tied to the VDD node. With include_inputs, terminals on inputs held at VDD also count
+    (gate tunnelling supplied by the input sources).
+
+    currents maps "<fet>_<id|ig|is|ib>" to amps (scalars, arrays or DataFrame columns), so the
+    same formula serves the SPICE oracle check and the ML prediction.
+    """
+    rails = {"vdd"}
+    if include_inputs:
+        rails |= {n for n, bit in zip(inputs(gate), bits) if bit == "1"}
+    return sum(currents[f"{name}_{c}"]
+               for name, _, *terms in GATES[gate]
+               for node, c in zip(terms, CURRENTS) if node in rails)
+
+
+def measurements(gate):
+    """(vector name, ngspice expression) for everything recorded per simulation."""
+    out = [("i_supply", "-i(vsupply)")]                       # current delivered by VDD
+    out += [(f"i_in_{n}", f"-i(vin_{n})") for n in inputs(gate)]   # current delivered by input n
+    out += [(f"v_{n}", f"v({n})") for n in nodes(gate)]
+    out += [(f"{name}_{c}", f"i(v{name}_{t})")               # ammeter current = INTO terminal t
+            for name, *_ in GATES[gate] for t, c in zip(TERMINALS, CURRENTS)]
+    return out
+
+
+def build_netlist(gate, bits, corner, control=False):
+    """Gate netlist at one corner; with control=True it also runs .op and prints the results."""
+    vdd = corner["vdd"]
+    lines = [
+        f"* {gate.upper()} inputs {'AB'[:len(bits)]}={bits}, corner {int(corner['corner'])}",
+        model_card("nmos", corner_params(corner, "nmos")),
+        model_card("pmos", corner_params(corner, "pmos")),
+        "",
+        config.SPICE_OPTIONS,
+        f".temp {corner['temp']!r}",
+        "",
+        f"vsupply vdd 0 DC {vdd!r}",
+    ]
+    lines += [f"vin_{n} {n} 0 DC {(vdd if bit == '1' else 0.0)!r}"
+              for n, bit in zip(inputs(gate), bits)]
+    lines += ["", "* M<name> d g s b, each terminal through a 0 V ammeter v<name>_<terminal>"]
+    for name, mos_type, *terms in GATES[gate]:
+        lines.append(f"{name} {' '.join(f'{name}_{t}' for t in TERMINALS)} {MODEL_NAME[mos_type]} "
+                     f"W={config.GATE_W[mos_type]!r} L={config.L!r}")
+        lines += [f"v{name}_{t} {node} {name}_{t} DC 0" for t, node in zip(TERMINALS, terms)]
+    if control:
+        lines += ["", ".control", "set numdgt=15", "op"]
+        lines += [f"let {v} = {expr}" for v, expr in measurements(gate)]
+        lines += [f"print {v}" for v, _ in measurements(gate)]
+        lines += [".endc"]
+    return "\n".join(lines + ["", ".end", ""])
+
+
+def _control_script(jobs, netlist_paths):
+    """One ngspice run that loads, solves and prints every netlist in turn."""
+    lines = ["* batch driver", ".control", "set numdgt=15"]
+    for k, ((gate, _, _), path) in enumerate(zip(jobs, netlist_paths)):
+        lines += [f"echo @@run {k}", f"source {path}", "op"]
+        lines += [f"let {v} = {expr}" for v, expr in measurements(gate)]
+        lines += [f"print {v}" for v, _ in measurements(gate)]
+        lines += ["destroy all", "remcirc"]   # a failed run cannot reuse the previous results
+    lines += [".endc", ".end"]
+    return "\n".join(lines) + "\n"
+
+
+def _parse_output(stdout, jobs):
+    """One dict {vector: value} per job; None where a run did not print every vector."""
+    results = [dict() for _ in jobs]
+    k = None
+    for line in stdout.splitlines():
+        m = re.match(r"\s*@@run (\d+)", line)
+        if m:
+            k = int(m.group(1))
+            continue
+        m = re.match(r"\s*(\w+)\s*=\s*(\S+)", line)
+        if m and k is not None:
+            results[k][m.group(1)] = float(m.group(2))
+    expected = [{v for v, _ in measurements(gate)} for gate, _, _ in jobs]
+    return [r if set(r) == want else None for r, want in zip(results, expected)]
+
+
+def run_batch(jobs):
+    """Simulate a list of (gate, bits, corner) jobs in a single ngspice process."""
+    with tempfile.TemporaryDirectory(prefix="dvd_part3_") as tmp:
+        tmp = Path(tmp)
+        paths = []
+        for k, (gate, bits, corner) in enumerate(jobs):
+            path = tmp / f"g{k}.cir"
+            path.write_text(build_netlist(gate, bits, corner))
+            paths.append(path)
+        driver = tmp / "driver.cir"
+        driver.write_text(_control_script(jobs, paths))
+        proc = subprocess.run([config.NGSPICE, "-b", str(driver)], capture_output=True, text=True)
+    return _parse_output(proc.stdout, jobs)
+
+
+def run_jobs(jobs, batch_size=100, workers=None):
+    """Simulate many jobs, split into batches that run in parallel ngspice processes."""
+    batches = [jobs[i:i + batch_size] for i in range(0, len(jobs), batch_size)]
+    with ProcessPoolExecutor(max_workers=workers or os.cpu_count()) as pool:
+        out = pool.map(run_batch, batches)
+    return [r for batch in out for r in batch]
