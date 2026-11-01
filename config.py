@@ -55,3 +55,8 @@ SEEDS = {
     "corners": 2026,    # Part 3 and 4: the 200 shared PVT corners
 }
 N_CORNERS = 200
+CORNERS_FILE = DATA_DIR / "corners.csv"
+
+# ---------------------------------------------------------------- gates (Parts 3 and 4)
+# The spec gives no gate sizing, so every NMOS and PMOS in a gate is minimum size (W = Lmin).
+GATE_W = {"nmos": W_MIN, "pmos": W_MIN}
