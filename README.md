@@ -29,9 +29,16 @@ part2_models/
   leakage_model.py      # features, log10|I| + sign target, saved CaseModel (load_case_model)
   train_compare.py      # 4 model families x 4 cases -> comparison table, chosen models, plots
   learning_curve.py     # chosen model vs training-set size (1k, 2k, 5k, 7k)
-data/                   # generated datasets (Part 1 CSVs)
+part3_gates/
+  netlists/             # one runnable SPICE netlist per gate (inv, nand2, nor2, and2, or2 .cir)
+  corners.py            # the 200 shared PVT corners -> data/corners.csv (also used by Part 4)
+  gates.py              # gate topologies, gate netlists, batched ngspice runs, leakage formula
+  simulate.py           # 18 cases x 200 corners in SPICE + oracle check -> results/part3/
+  compare.py            # ML gate leakage vs SPICE -> results table, parity plot
+data/                   # generated datasets (Part 1 CSVs) and the corner table
 results/part1/          # Part 1 plots, KCL summary, validation summary
 results/part2/          # Part 2 tables, plots and the four saved models
+results/part3/          # Part 3 SPICE records, predictions, gate table, oracle check, parity plot
 ```
 Each later part gets its own `partN_*/` folder and writes its outputs under `results/partN/`.
 
@@ -115,6 +122,48 @@ from leakage_model import load_case_model
 m = load_case_model("results/part2/models/nmos_off.joblib")
 currents = m.predict(df)   # df with the 12 input columns -> DataFrame id, ig, is, ib in A
 ```
+
+## Running Part 3
+```
+.venv/bin/python part3_gates/simulate.py   # ~1 min on 16 cores, 3,600 SPICE runs + oracle check
+.venv/bin/python part3_gates/compare.py    # ~5 s, ML prediction, gate table and parity plot
+```
+`simulate.py` draws `data/corners.csv` (seed `SEEDS["corners"]`) on first use and reuses it after that; Part 4 reads the same file through `part3_gates/corners.py:load_corners`.
+
+### Method
+- **Gates:** static CMOS INV, NAND2, NOR2, and AND2 / OR2 as NAND2 / NOR2 + INV in one netlist,
+  using the 22nm MGK NMOS and PMOS cards with the corner's vth0, toxe, ndep, u0, xj. The spec gives
+  no gate sizing, so every transistor is minimum size, W = L = 22 nm (`GATE_W` in `config.py`).
+  All NMOS in a gate share the corner's NMOS parameters, all PMOS its PMOS parameters.
+- **SPICE records:** every transistor terminal is wired through its own 0 V source, so each run
+  records all terminal currents, the supply and input-source currents, and the output and internal
+  node voltages (x, y, and the NAND / NOR output inside AND2 / OR2). One row per run in
+  `results/part3/spice_gates.csv`.
+- **ML prediction:** each transistor's (Vd, Vg, Vs, Vb) comes from the SPICE node voltages, inputs
+  are exactly 0 or VDD, and the ON / OFF model is picked from the gate voltage (above or below VDD/2).
+  Vg is passed to the model at the rail it was trained at; feeding the recorded Vg instead is
+  reported as a variant.
+- **Leakage:** the sum of the currents into every transistor terminal tied to VDD
+  (`part3_gates/gates.py:leakage`), the same formula for SPICE and ML.
+- **Oracle check** (`results/part3/oracle_check.txt`): on the SPICE terminal currents the formula
+  reproduces −i(Vsupply) to 9e-16, below the 1e-6 limit.
+
+### Results
+Over all 3,600 gate runs: median error 132%, 95th percentile 275%
+(`results/part3/gate_table.md`, `plots/gate_parity.png`). The cases split into two groups:
+- **No ON PMOS on VDD** (INV 1, NAND2 11, NOR2 10, NOR2 11): median 6.5–9.0%, p95 18–31%. The
+  leakage comes from OFF PMOS at |Vds| ≈ VDD, where only about 1% of the training rows lie
+  (Vd and Vs are drawn independently); the Part 2 OFF models' error there is about 4% instead of 1.4%.
+- **An ON PMOS on VDD** (the other 14 cases): the ML leakage has the wrong sign, 80–210% median
+  error. The ON PMOS sits at |Vds| ≤ 4.3 mV, so its Is is only the OFF network's leakage (~1e-8 A),
+  far below its normal ON current. The PMOS ON model predicts that Is with the wrong sign in every
+  run. On the Part 2 test set its Is error for |Vds| < 10 mV is 21% (sign right in 73%) against 1–2%
+  elsewhere, and only 44 of the 10,000 training rows have |Vds| < 2 mV. Fixing this needs a better
+  PMOS / NMOS ON model near Vds = 0 (Part 2), e.g. more training samples there.
+- **AND2 / OR2 inverter input:** the internal NAND / NOR output is at most 1.8% of VDD off the rail.
+  Feeding the recorded Vg instead of the rail value changes the median error by less than 1 point.
+- **Input-source current (TA question 3):** counting the gate current drawn from inputs held at VDD
+  is in the variants table of `gate_table.md`.
 
 ## Conventions (fix these before writing code)
 - **Current sign:** current flowing *into* a terminal is positive. The KCL check is then `Id + Ig + Is + Ib ≈ 0`.
