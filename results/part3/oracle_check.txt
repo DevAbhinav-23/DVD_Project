@@ -1,0 +1,23 @@
+Oracle check (PASS, limit 1e-06), 3600 simulations:
+  supply only              max |formula - SPICE| / |SPICE| = 8.78e-16
+  supply + inputs at VDD   max |formula - SPICE| / |SPICE| = 8.32e-16
+
+Output and internal node voltages / VDD (min .. max over corners):
+  inv   0   out 0.9954..0.9999
+  inv   1   out 0.0000..0.0007
+  nand2 00  out 0.9992..1.0000  x 0.0566..0.1214
+  nand2 01  out 0.9955..0.9999  x 0.0000..0.0009
+  nand2 10  out 0.9973..0.9999  x 0.7389..0.8188
+  nand2 11  out 0.0001..0.0029  x 0.0001..0.0015
+  nor2  00  out 0.9824..0.9996  y 0.9910..0.9998
+  nor2  01  out 0.0000..0.0007  y 0.9974..0.9999
+  nor2  10  out 0.0000..0.0005  y 0.1489..0.1984
+  nor2  11  out 0.0000..0.0002  y 0.8907..0.9295
+  and2  00  out 0.0000..0.0007  x 0.0565..0.1214  nand_out 0.9986..0.9999
+  and2  01  out 0.0000..0.0007  x 0.0000..0.0009  nand_out 0.9953..0.9998
+  and2  10  out 0.0000..0.0007  x 0.7388..0.8187  nand_out 0.9968..0.9998
+  and2  11  out 0.9954..0.9999  x 0.0001..0.0019  nand_out 0.0002..0.0035
+  or2   00  out 0.0000..0.0008  y 0.9907..0.9996  nor_out 0.9820..0.9993
+  or2   01  out 0.9954..0.9999  y 0.9974..0.9999  nor_out 0.0001..0.0011
+  or2   10  out 0.9954..0.9999  y 0.1489..0.1984  nor_out 0.0000..0.0009
+  or2   11  out 0.9954..0.9999  y 0.8907..0.9295  nor_out 0.0000..0.0004
