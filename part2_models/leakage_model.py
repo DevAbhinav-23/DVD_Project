@@ -17,7 +17,7 @@ import pandas as pd
 
 INPUTS = ["vdd", "temp", "w", "vd", "vs", "vg", "vb", "vth0", "toxe", "ndep", "u0", "xj"]
 TARGETS = ["id", "ig", "is", "ib"]
-I_FLOOR = 1e-21  # |I| below this is treated as numerically zero (SPICE abstol is 1e-18)
+I_FLOOR = 1e-15  # |I| below this is SPICE numerical noise (exact zeros, ~fA residue); clipped here
 
 K_Q = 8.617e-5
 
@@ -49,6 +49,9 @@ def make_features(df):
     X["ovn_vt"] = (X["vg"] - v_lo - avth) / vt
     X["ovp_vt"] = (v_hi - X["vg"] - avth) / vt
     X["vds_vt"] = X["vds_abs"] / vt
+    # Near Vds = 0 (ON devices inside gates) the channel current is proportional to Vds, so
+    # log|Vds| turns that into a straight line in log|I|.
+    X["log_vds_abs"] = np.log10(X["vds_abs"] + 1e-9)
     return X
 
 

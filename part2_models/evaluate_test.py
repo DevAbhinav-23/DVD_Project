@@ -14,8 +14,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from train_compare import CASES, OUT_DIR, TARGETS  # noqa: E402
-from leakage_model import INPUTS, load_case_model  # noqa: E402
+from train_compare import CASES, DATASETS, OUT_DIR, TARGETS  # noqa: E402
+from leakage_model import I_FLOOR, INPUTS, load_case_model  # noqa: E402
 import config  # noqa: E402  (path added by train_compare)
 
 matplotlib.use("Agg")
@@ -28,26 +28,31 @@ COLORS = dict(zip(TARGETS, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]))
 def main():
     frames = []
     for case in CASES:
-        df = pd.read_csv(config.DATA_DIR / f"{case}.csv")
-        te = pd.read_csv(OUT_DIR / "splits" / f"{case}_test_idx.csv").row.values
-        test = df.iloc[te]
-        pred = load_case_model(OUT_DIR / "models" / f"{case}.joblib").predict(test)
-        out = test[INPUTS].copy()
-        out.insert(0, "row", te)
-        out.insert(0, "case", case)
-        for t in TARGETS:
-            out[f"{t}_spice"] = test[t]
-            out[f"{t}_ml"] = pred[t]
-            out[f"{t}_err_pct"] = 100 * np.abs(pred[t] - test[t]) / np.abs(test[t])
-        frames.append(out)
+        model = load_case_model(OUT_DIR / "models" / f"{case}.joblib")
+        for set_name, pattern in DATASETS.items():
+            df = pd.read_csv(config.DATA_DIR / pattern.format(case=case))
+            te = pd.read_csv(OUT_DIR / "splits" / f"{case}_{set_name}_test_idx.csv").row.values
+            test = df.iloc[te]
+            pred = model.predict(test)
+            out = test[INPUTS].copy()
+            out.insert(0, "row", te)
+            out.insert(0, "test_set", set_name)
+            out.insert(0, "case", case)
+            for t in TARGETS:
+                out[f"{t}_spice"] = test[t]
+                out[f"{t}_ml"] = pred[t]
+                # relative error is undefined for SPICE currents at the numerical floor
+                out[f"{t}_err_pct"] = np.where(test[t].abs() >= I_FLOOR,
+                                               100 * np.abs(pred[t] - test[t]) / np.abs(test[t]), np.nan)
+            frames.append(out)
     res = pd.concat(frames, ignore_index=True)
     res.to_csv(OUT_DIR / "test_predictions.csv", index=False)
 
     rows = []
-    for case, g in res.groupby("case", sort=False):
+    for (case, set_name), g in res.groupby(["case", "test_set"], sort=False):
         for t in TARGETS:
-            e = g[f"{t}_err_pct"]
-            rows.append({"case": case, "terminal": t, "n": len(g), "median_err_pct": e.median(),
+            e = g[f"{t}_err_pct"].dropna()
+            rows.append({"case": case, "test_set": set_name, "terminal": t, "n": len(e), "median_err_pct": e.median(),
                          "p95_err_pct": e.quantile(0.95), "within_1pct": (e < 1).mean() * 100,
                          "within_5pct": (e < 5).mean() * 100, "within_10pct": (e < 10).mean() * 100})
     summary = pd.DataFrame(rows)
@@ -57,9 +62,9 @@ def main():
     fig, axes = plt.subplots(1, 4, figsize=(16, 3.8), sharey=True)
     bins = np.logspace(-4, 3, 50)
     for ax, case in zip(axes, CASES):
-        g = res[res.case == case]
+        g = res[(res.case == case) & (res.test_set == "targeted")]
         for t in TARGETS:
-            ax.hist(np.clip(g[f"{t}_err_pct"], 1e-4, 1e3), bins=bins, histtype="step", lw=1.8,
+            ax.hist(np.clip(g[f"{t}_err_pct"].dropna(), 1e-4, 1e3), bins=bins, histtype="step", lw=1.8,
                     color=COLORS[t], label=t)
         ax.axvline(1, color="#898781", lw=1, ls="--")
         ax.set_xscale("log")
@@ -71,7 +76,7 @@ def main():
     axes[0].set_ylabel("Test samples")
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 0.92))
-    fig.suptitle("Test-set relative error per terminal (dashed line = 1%)", fontsize=12)
+    fig.suptitle("Relative error on the targeted (gate operating point) test set (dashed line = 1%)", fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.86))
     fig.savefig(OUT_DIR / "plots" / "test_error_hist.png", dpi=130)
     plt.close(fig)

@@ -37,16 +37,14 @@
  },
  "nmos_on/lightgbm": {
   "id": {
-   "num_leaves": 15,
-   "max_depth": 6
+   "num_leaves": 31
   },
   "ig": {
    "num_leaves": 15,
    "max_depth": 6
   },
   "is": {
-   "num_leaves": 15,
-   "max_depth": 6
+   "num_leaves": 31
   },
   "ib": {
    "num_leaves": 15,
@@ -135,8 +133,7 @@
    "num_leaves": 31
   },
   "ib": {
-   "num_leaves": 15,
-   "max_depth": 6
+   "num_leaves": 31
   }
  },
  "nmos_off/mlp": {
@@ -211,8 +208,7 @@
  },
  "pmos_on/lightgbm": {
   "id": {
-   "num_leaves": 15,
-   "max_depth": 6
+   "num_leaves": 31
   },
   "ig": {
    "num_leaves": 15,
@@ -293,7 +289,7 @@
    "min_samples_leaf": 1
   },
   "ib": {
-   "max_features": 0.5,
+   "max_features": 1.0,
    "min_samples_leaf": 1
   }
  },

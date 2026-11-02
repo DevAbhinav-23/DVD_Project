@@ -38,11 +38,14 @@ from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config  # noqa: E402
-from leakage_model import INPUTS, TARGETS, CaseModel, Column, SignModel, make_features, to_log  # noqa: E402
+from leakage_model import I_FLOOR, INPUTS, TARGETS, CaseModel, Column, SignModel, make_features, to_log  # noqa: E402
 
 CASES = list(config.CASES)
 SEED = config.SEEDS["split"]
-SPLIT = (0.70, 0.15, 0.15)  # train / val / test
+SPLIT = (0.70, 0.15, 0.15)  # train / val / test, applied to each dataset separately
+# data/<case>.csv (uniform Vd, Vs) and data/<case>_targeted.csv (gate operating points) are
+# split separately with the same seed and combined, so each test slice can be reported on its own.
+DATASETS = {"uniform": "{case}.csv", "targeted": "{case}_targeted.csv"}
 OUT_DIR = config.RESULTS_DIR / "part2"
 
 matplotlib.use("Agg")
@@ -58,7 +61,10 @@ SIGN_MIXED_MIN = 0.002  # treat a terminal's sign as constant if the minority is
 
 # ---------------------------------------------------------------- metrics
 def metrics(i_true, i_pred):
-    rel = np.abs(i_pred - i_true) / np.maximum(np.abs(i_true), 1e-30)
+    # Rows whose SPICE current is below the noise floor have no meaningful relative error.
+    keep = np.abs(i_true) >= I_FLOOR
+    i_true, i_pred = i_true[keep], i_pred[keep]
+    rel = np.abs(i_pred - i_true) / np.abs(i_true)
     lt, lp = to_log(i_true), to_log(i_pred)
     r2_log = 1 - np.sum((lt - lp) ** 2) / np.sum((lt - lt.mean()) ** 2)
     r2_lin = 1 - np.sum((i_true - i_pred) ** 2) / np.sum((i_true - i_true.mean()) ** 2)
@@ -67,6 +73,7 @@ def metrics(i_true, i_pred):
         "median_err_pct": 100 * np.median(rel), "p95_err_pct": 100 * np.percentile(rel, 95),
         "mean_err_pct": 100 * np.mean(np.minimum(rel, 1.0)),  # capped at 100% per sample
         "sign_acc": np.mean(np.sign(i_true) == np.sign(i_pred)),
+        "n_below_floor": int((~keep).sum()),
     }
 
 
@@ -119,19 +126,11 @@ FAST_GRIDS = {k: v[:1] for k, v in GRIDS.items()}
 
 
 def fit_sign_classifier(family, Xtr, s):
-    if family == "lightgbm":
-        m = lgb.LGBMClassifier(n_estimators=600, learning_rate=0.05, random_state=SEED, n_jobs=-1, verbose=-1)
-    elif family == "xgboost":
-        import xgboost as xgb
-        m = xgb.XGBClassifier(n_estimators=600, learning_rate=0.05, max_depth=6, random_state=SEED, n_jobs=-1)
-    elif family == "random_forest":
-        m = RandomForestClassifier(n_estimators=400, random_state=SEED, n_jobs=-1)
-    elif family == "poly_ridge":
-        m = make_pipeline(StandardScaler(), PolynomialFeatures(2), StandardScaler(),
-                          LogisticRegression(C=10.0, max_iter=5000))
-    else:
-        m = make_pipeline(StandardScaler(), MLPClassifier((128, 128), activation="tanh", max_iter=2000,
-                                                          early_stopping=True, random_state=SEED))
+    # The sign only flips in a narrow band (Vd ≈ Vs, or where gate and channel leakage cancel),
+    # where a boosted-tree classifier is far more reliable than the others (MLP classifier: 94-95%
+    # sign accuracy on NMOS ON vs 99-100%). So every family uses the same LightGBM sign model, and
+    # the comparison between families is about the magnitude regressor.
+    m = lgb.LGBMClassifier(n_estimators=600, learning_rate=0.05, random_state=SEED, n_jobs=-1, verbose=-1)
     y = (s > 0).astype(int)
     m.fit(Xtr, y)
 
@@ -176,7 +175,8 @@ def train_family(family, grid, Xtr, Ytr, Xva, Yva, Itr):
 def parity_plot(case, df_test, pred, path):
     fig, axes = plt.subplots(1, 4, figsize=(16, 4.2))
     for ax, t in zip(axes, TARGETS):
-        x, y = np.abs(df_test[t].values), np.abs(pred[t].values)
+        keep = np.abs(df_test[t].values) >= I_FLOOR
+        x, y = np.abs(df_test[t].values[keep]), np.abs(pred[t].values[keep])
         lo, hi = np.log10(max(min(x.min(), y.min()), 1e-22)), np.log10(max(x.max(), y.max()))
         ax.plot([10 ** lo, 10 ** hi], [10 ** lo, 10 ** hi], color="#898781", lw=1, zorder=1)
         ax.scatter(x, y, s=6, alpha=0.5, color="#2a78d6", linewidths=0, zorder=2)
@@ -243,15 +243,31 @@ def main():
     rows, test_rows, hparams = [], [], {}
 
     for case in a.cases:
-        df = pd.read_csv(Path(a.data_dir) / f"{case}.csv")
-        df.columns = [c.strip().lower() for c in df.columns]
-        missing = set(INPUTS + TARGETS) - set(df.columns)
-        if missing:
-            raise SystemExit(f"{case}: missing columns {sorted(missing)}")
-        df = df.dropna(subset=INPUTS + TARGETS).reset_index(drop=True)
-        tr, va, te = split_idx(len(df))
-        for name, ix in zip(("train", "val", "test"), (tr, va, te)):
-            pd.Series(ix, name="row").to_csv(out / "splits" / f"{case}_{name}_idx.csv", index=False)
+        parts, idx = [], {"train": [], "val": [], "test_uniform": [], "test_targeted": []}
+        offset = 0
+        for set_name, pattern in DATASETS.items():
+            path = Path(a.data_dir) / pattern.format(case=case)
+            if not path.exists():
+                print(f"  ({path.name} not found, skipped)")
+                continue
+            d = pd.read_csv(path)
+            d.columns = [c.strip().lower() for c in d.columns]
+            missing = set(INPUTS + TARGETS) - set(d.columns)
+            if missing:
+                raise SystemExit(f"{path.name}: missing columns {sorted(missing)}")
+            d = d.dropna(subset=INPUTS + TARGETS).reset_index(drop=True)
+            s_tr, s_va, s_te = split_idx(len(d))
+            for name, ix in zip(("train", "val", "test"), (s_tr, s_va, s_te)):
+                pd.Series(ix, name="row").to_csv(out / "splits" / f"{case}_{set_name}_{name}_idx.csv", index=False)
+            idx["train"].append(s_tr + offset)
+            idx["val"].append(s_va + offset)
+            idx[f"test_{set_name}"].append(s_te + offset)
+            parts.append(d.assign(dataset=set_name))
+            offset += len(d)
+        df = pd.concat(parts, ignore_index=True)
+        tr, va = np.concatenate(idx["train"]), np.concatenate(idx["val"])
+        tests = {k[5:]: np.concatenate(v) for k, v in idx.items() if k.startswith("test_") and v}
+        te = np.concatenate(list(tests.values()))
 
         X = make_features(df)
         X = X.loc[:, X.iloc[tr].nunique() > 1]  # drop columns constant in this case (e.g. vb)
@@ -281,14 +297,15 @@ def main():
         print(f"  -> chosen: {best}", flush=True)
         cm = models[best]
         joblib.dump(cm, out / "models" / f"{case}.joblib")
-        pred_te = cm.predict(df.iloc[te])
-        for t in TARGETS:
-            test_rows.append({"case": case, "family": best, "terminal": t,
-                              **metrics(df[t].iloc[te].values, pred_te[t].values)})
-        # KCL residual of the predictions, relative to the largest terminal current.
-        kcl = pred_te.sum(axis=1).abs() / pred_te.abs().max(axis=1)
-        test_rows[-1]["kcl_pred_median"] = float(kcl.median())
-        parity_plot(case, df.iloc[te], pred_te, out / "plots" / f"parity_{case}.png")
+        for set_name, ix in tests.items():
+            pred_te = cm.predict(df.iloc[ix])
+            for t in TARGETS:
+                test_rows.append({"case": case, "test_set": set_name, "family": best, "terminal": t,
+                                  **metrics(df[t].iloc[ix].values, pred_te[t].values)})
+            suffix = "" if set_name == "uniform" else f"_{set_name}"
+            parity_plot(f"{case} ({set_name})", df.iloc[ix], pred_te, out / "plots" / f"parity_{case}{suffix}.png")
+            r = pd.DataFrame(test_rows[-4:])
+            print(f"  test {set_name:9s} median {r.median_err_pct.mean():.3f}%  p95 {r.p95_err_pct.mean():.2f}%", flush=True)
 
     table = pd.DataFrame(rows)
     test = pd.DataFrame(test_rows)
@@ -297,7 +314,7 @@ def main():
     cols = ["r2_log", "median_err_pct", "p95_err_pct"]
     wide = table.pivot_table(index=["case", "terminal"], columns="family", values=cols)
     (out / "comparison_table.md").write_text(_md(wide, cols, a.families))
-    (out / "test_metrics.md").write_text(test[["case", "family", "terminal"] + cols + ["mean_err_pct", "sign_acc"]]
+    (out / "test_metrics.md").write_text(test[["case", "test_set", "family", "terminal"] + cols + ["mean_err_pct", "sign_acc"]]
                                          .to_markdown(index=False, floatfmt=".4g"))
     (out / "hyperparameters.json").write_text(json.dumps(hparams, indent=1, default=str))
     if len(a.families) > 1:

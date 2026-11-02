@@ -107,18 +107,24 @@ All checks pass ([results/part1/validation_summary.txt](results/part1/validation
 
 ## Running Part 2
 ```
-.venv/bin/python part2_models/train_compare.py    # ~45 min on 4 cores, writes results/part2/
+.venv/bin/python part2_models/train_compare.py    # ~1 h on 4 cores, writes results/part2/
+.venv/bin/python part2_models/evaluate_test.py    # per-row SPICE vs ML on both test sets
 .venv/bin/python part2_models/learning_curve.py   # ~40 min, needs train_compare.py first
 ```
 `train_compare.py --fast` runs one hyperparameter setting per family as a quick smoke test.
 
 ### Method
-- **Split:** 70 / 15 / 15 with `SEEDS["split"]`; row indices saved in `results/part2/splits/`.
-- **Target:** each current is predicted as `sign(I) × 10^y` with `y = log10|I|`. Where a terminal's
-  sign is mixed in the training data (Id and Is), a classifier from the same family predicts it.
-- **Features:** the 12 inputs plus Vds, |Vds|, Vgs, Vgd, Vbs, Vbd, gate and body voltage relative to
-  min/max(Vd, Vs), 1/kT, logs of W, toxe, ndep and u0, and the subthreshold exponents
-  (Vgs − |vth0|)/kT. Columns constant within a case are dropped.
+- **Data:** `data/<case>.csv` (uniform) and `data/<case>_targeted.csv` (gate operating points) are each
+  split 70 / 15 / 15 with `SEEDS["split"]` and combined for training and validation. The two test slices are
+  reported separately. Row indices are saved in `results/part2/splits/<case>_<set>_<split>_idx.csv`.
+- **Target:** each current is predicted as `sign(I) × 10^y` with `y = log10|I|`, clipped at 1e-15 A
+  (SPICE's numerical floor; rows below it are left out of the error metrics). Where a terminal's sign is
+  mixed in training (Id and Is), a LightGBM classifier predicts it for every family: the sign flips only
+  in a narrow band near Vd ≈ Vs, where the MLP classifier was clearly worse (94–95% vs 99–100%).
+- **Features:** the 12 inputs plus Vds, |Vds|, log10|Vds|, Vgs, Vgd, Vbs, Vbd, gate and body voltage
+  relative to min/max(Vd, Vs), 1/kT, logs of W, toxe, ndep and u0, and the subthreshold exponents
+  (Vgs − |vth0|)/kT. log10|Vds| matters for ON devices near Vds = 0, where the channel current is
+  proportional to Vds. Columns constant within a case are dropped.
 - **Model types:** degree-2/3 polynomial ridge (baseline), Random Forest, LightGBM, and an MLP
   (3 × 64 tanh, full-batch L-BFGS). The MLP and ridge are one model with four outputs; the tree
   models have one model per terminal. XGBoost is also available via `--families xgboost`.
@@ -126,26 +132,38 @@ All checks pass ([results/part1/validation_summary.txt](results/part1/validation
   (median + 95th-percentile relative error) / 2. Gradient boosting uses the validation set for early stopping.
 
 ### Results
-The MLP wins every case. Validation set, mean over the four terminals (median / 95th-percentile relative error):
+The MLP wins every case. Validation set (both datasets), mean over the four terminals
+(median / 95th-percentile relative error):
 
 | Case | Poly ridge | Random Forest | LightGBM | **MLP** |
 |---|---|---|---|---|
-| NMOS ON | 11.1% / 43% | 12.1% / 54% | 4.1% / 18% | **1.3% / 7.3%** |
-| NMOS OFF | 13.8% / 73% | 5.7% / 37% | 3.3% / 26% | **1.1% / 7.0%** |
-| PMOS ON | 10.2% / 42% | 11.8% / 50% | 3.9% / 17% | **1.3% / 7.1%** |
-| PMOS OFF | 15.4% / 88% | 6.1% / 35% | 3.2% / 21% | **1.2% / 6.7%** |
+| NMOS ON | 10.9% / 58% | 11.5% / 53% | 4.3% / 25% | **2.3% / 22%** |
+| NMOS OFF | 15.2% / 76% | 5.9% / 37% | 3.1% / 25% | **1.5% / 7.7%** |
+| PMOS ON | 9.0% / 53% | 11.7% / 55% | 4.1% / 23% | **2.3% / 23%** |
+| PMOS OFF | 15.8% / 81% | 6.2% / 37% | 3.0% / 22% | **1.6% / 8.3%** |
 
-On the test set the chosen MLPs reach 1.1–1.3% median and 6.5–7.4% 95th-percentile error per
-case, with R² on log10|I| between 0.968 and 0.9999 per terminal (full tables in
-`results/part2/test_metrics.md` and `comparison_table.md`). The largest errors are in Id and Is
-of the OFF cases, where channel and gate leakage are similar in size and partly cancel, so the
-relative error of their difference is large; the sign is right in 98.5–99.6% of those rows.
+Test set, chosen MLP, mean over terminals (`results/part2/test_metrics.md`, `test_summary.csv`):
 
-**Learning curve** (`results/part2/learning_curve.csv`, `plots/learning_curve.png`): 1k training rows
-give 2.0–3.4% median and 28–64% 95th-percentile error, 2k rows already reach 1.2–1.4% median, and from
-5k to 7k both level off (median 1.1–1.4%, 95th percentile 5.9–8.7% at 5k and 6.6–7.4% at 7k; the small
-ups and downs between 5k and 7k are run-to-run noise of the L-BFGS fit). So about 5k samples per case
-is enough; extra SPICE data would buy little with this model.
+| Case | Uniform test: median / p95 | Targeted test: median / p95 |
+|---|---|---|
+| NMOS ON | 1.9% / 7.5% | 4.5% / 52% |
+| NMOS OFF | 1.4% / 7.1% | 2.0% / 12% |
+| PMOS ON | 1.9% / 7.0% | 4.8% / 54% |
+| PMOS OFF | 1.5% / 7.0% | 1.9% / 12% |
+
+- **Before the targeted data**, the same models were trained on the uniform set only. They scored
+  1.1–1.3% on the uniform test but 120–180% median error on the targeted ON test points, with the
+  sign of Id and Is right in only 42–72% of them.
+- **The remaining large targeted errors** are Id and Is of ON devices at |Vds| of µV to mV, where the
+  channel current passes through zero and partly cancels the gate current (sign right in 98–99%).
+  Part 3's leakage formula does not use those currents (it solves them by KCL). The Ig and Ib of the same
+  devices, which Part 3 does use, are at 2.1–2.6% median error.
+- **Uniform accuracy** dropped from 1.1–1.3% to 1.4–1.9% median, since one network of the same size now covers
+  the targeted region too.
+
+**Learning curve** (`results/part2/learning_curve.csv`, `plots/learning_curve.png`; still from the
+uniform-only training): 1k training rows give 2.0–3.4% median and 28–64% 95th-percentile error, 2k rows
+reach 1.2–1.4% median, and from 5k to 7k both level off. It has not been re-run with the targeted data.
 
 ### Using the models (Parts 3 and 4)
 ```python
@@ -193,21 +211,20 @@ currents = m.predict(df)   # df with the 12 input columns -> DataFrame id, ig, i
   relative to ~10 nA of gate leakage.
 
 ### Results
-Over all 3,600 gate runs, with the current Part 2 models: **median error 4.4%, 95th percentile 18%,
-bias −1.1%** (`results/part3/gate_table.md`, `plots/gate_parity.png`). Every case has the right sign;
-the per-case median error is 2.7–9.0%.
+Over all 3,600 gate runs, with the current Part 2 models (retrained on uniform + targeted data):
+**median error 1.5%, 95th percentile 4.9%, mean 1.9%, bias −0.7%** (`results/part3/gate_table.md`,
+`plots/gate_parity.png`). Every case has the right sign; the per-case median error is 1.1–2.7%.
+With the earlier uniform-only models it was 4.4% median, 18% p95.
 - **Formula change:** with the previous formula (VDD terminals) the same models gave a 132% median
   error, wrong-signed in the 14 cases with an ON PMOS on VDD (variants table, last column).
-- **Remaining error** comes from the OFF transistors at the rails (|Vds| ≈ VDD, or terminals near
-  0 / VDD), where the uniform training data is thin: the OFF models' error there is about 10–16% per
-  terminal. The Part 1 targeted dataset (`data/<case>_targeted.csv`) covers these points; retraining
-  Part 2 on it is the next step.
-- **Least accurate:** NOR2 11 (median 9.0%, p95 31%), where the leakage is the smallest (~0.7 nA) and
-  flows through two series OFF PMOS; INV 1 and NAND2 11 (7.9%), carried by OFF PMOS at |Vds| = VDD.
+- **Retraining on the targeted data** (OFF devices at the rails, ON devices at Vds ≈ 0) cut the
+  gate error from 4.4% to 1.5% median and from 18% to 4.9% p95.
+- **Least accurate:** NOR2 10 (median 2.7%, p95 6.9%) and NOR2 11 (2.4%, 8.1%), where the leakage is the
+  smallest (0.7–9 nA) and flows through series OFF PMOS; NAND2 00 (2.0%) is next.
 - **AND2 / OR2 inverter input:** the internal NAND / NOR output is at most 1.8% of VDD off the rail.
-  Feeding the recorded Vg instead of the rail value changes the median error by less than 0.2 points.
+  Feeding the recorded Vg instead of the rail value changes the median error by at most 1.1 points (OR2 00).
 - **Input-source current (TA question 3):** counting the gate current drawn from inputs held at VDD
-  gives a 3.4% median error (variants table of `gate_table.md`).
+  gives a 1.4% median error (variants table of `gate_table.md`).
 
 ## Conventions (fix these before writing code)
 - **Current sign:** current flowing *into* a terminal is positive. The KCL check is then `Id + Ig + Is + Ib ≈ 0`.
