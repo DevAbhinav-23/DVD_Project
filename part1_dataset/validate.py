@@ -1,4 +1,4 @@
-"""Part 1: validate the datasets (KCL check, sanity checks, trend plots) -> results/part1/.
+"""Part 1: validate the datasets (KCL, sanity, coverage, trend plots) -> results/part1/.
 
 Usage:  python part1_dataset/validate.py
 """
@@ -18,14 +18,23 @@ from spice_utils import CURRENTS, run_batch
 OUT_DIR = config.RESULTS_DIR / "part1"
 SWEEP_POINTS = 41
 SWEEP_W = 44e-9                 # same width as the example netlists
-# Max allowed |Id+Ig+Is+Ib| / max|I|: 10x below the 1% accuracy target. The residual is a
-# few-fA floor from the BSIM4 current bookkeeping (unchanged with 1000x tighter tolerances),
-# so it only matters for rows where every current is in the pA range.
+# KCL passes when |Id+Ig+Is+Ib| <= KCL_LIMIT * max|I| + KCL_ABS (same form as SPICE's
+# reltol / abstol). KCL_LIMIT is 10x below the 1% accuracy target. The residual is a few-fA
+# floor from the BSIM4 current bookkeeping (unchanged with 1000x tighter tolerances), so it only
+# matters for rows where every current is in the pA range; KCL_ABS = 0.1% of 0.1 nA, below
+# which no gate leakage we evaluate lies.
 KCL_LIMIT = 1e-3
+KCL_ABS = 1e-13                 # A
+
+SETS = {"uniform": ("", config.N_SAMPLES), "targeted": ("_targeted", config.N_TARGETED)}
+
+# Gate operating points (fractions of VDD) used for the coverage table
+ON_VDS_MAX = 4e-3               # V, |Vds| of an ON device that carries only leakage
+RAIL_TOL = 0.01                 # within 1% of VDD counts as "at the rail"
 
 # Plot styling
-SAMPLE_COLOR = "#2a78d6"        # dataset scatter
-SWEEP_COLOR = "#eb6834"         # controlled sweep line
+SAMPLE_COLOR = "#2a78d6"        # dataset scatter / uniform set
+SWEEP_COLOR = "#eb6834"         # controlled sweep line / targeted set
 INK, INK_2, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 plt.rcParams.update({
     "figure.facecolor": "#fcfcfb", "axes.facecolor": "#fcfcfb",
@@ -45,38 +54,53 @@ def log(msg=""):
 
 
 def load_datasets():
-    return {case: pd.read_csv(config.DATA_DIR / f"{case}.csv") for case in config.CASES}
+    """{set: {case: DataFrame}} for the uniform (spec) and targeted datasets."""
+    return {s: {case: pd.read_csv(config.DATA_DIR / f"{case}{suffix}.csv") for case in config.CASES}
+            for s, (suffix, _) in SETS.items()}
+
+
+def kcl_residual(df):
+    currents = df[CURRENTS].to_numpy()
+    residual = np.abs(currents.sum(axis=1))
+    return residual, np.abs(currents).max(axis=1)
 
 
 # ---------------------------------------------------------------- checks
-def kcl_check(data):
+def kcl_check(sets):
     rows = []
-    for case, df in data.items():
-        currents = df[CURRENTS].to_numpy()
-        residual = np.abs(currents.sum(axis=1))
-        rel = residual / np.abs(currents).max(axis=1)
-        rows.append({"case": case, "rows": len(df),
-                     "median_rel": np.median(rel), "p95_rel": np.percentile(rel, 95),
-                     "max_rel": rel.max(), "max_abs_A": residual.max(),
-                     "pass": bool(rel.max() < KCL_LIMIT)})
+    for s, data in sets.items():
+        for case, df in data.items():
+            residual, scale = kcl_residual(df)
+            rel = residual / scale
+            rows.append({"set": s, "case": case, "rows": len(df),
+                         "median_rel": np.median(rel), "p95_rel": np.percentile(rel, 95),
+                         "max_rel": rel.max(), "max_abs_A": residual.max(),
+                         "pass": bool((residual <= KCL_LIMIT * scale + KCL_ABS).all())})
     table = pd.DataFrame(rows)
     table.to_csv(OUT_DIR / "kcl_summary.csv", index=False)
 
-    log(f"KCL check: |Id+Ig+Is+Ib| / max|I|  (limit {KCL_LIMIT:g})")
+    log(f"KCL check: pass if |Id+Ig+Is+Ib| <= {KCL_LIMIT:g} * max|I| + {KCL_ABS:g} A")
     log(table.to_string(index=False, float_format=lambda x: f"{x:.2e}"))
     return table
 
 
-def sanity_checks(data):
-    """Row count, NaNs, parameter ranges and fixed Vg/Vb for every case."""
+def sanity_checks(sets):
+    """Row count, NaNs, parameter ranges and fixed Vg/Vb for every dataset."""
     log("\nSanity checks")
+    ok_all = True
+    for s, data in sets.items():
+        ok_all &= _sanity_checks(data, SETS[s][1], s)
+    return ok_all
+
+
+def _sanity_checks(data, n_rows, set_name):
     ok_all = True
     for case, df in data.items():
         spec = config.CASES[case]
         nominal = config.NOMINAL[spec["type"]]
         vdd = df["vdd"]
         checks = {
-            "row count": len(df) == config.N_SAMPLES,
+            "row count": len(df) == n_rows,
             "no NaN": not df.isna().any().any(),
             "vdd range": vdd.between(config.VDD_NOM * (1 - config.VDD_VAR),
                                      config.VDD_NOM * (1 + config.VDD_VAR)).all(),
@@ -92,8 +116,39 @@ def sanity_checks(data):
             checks[f"{name} +/-10%"] = ratio.between(1 - config.PROCESS_VAR, 1 + config.PROCESS_VAR).all()
         failed = [k for k, v in checks.items() if not v]
         ok_all &= not failed
-        log(f"  {case:9s} {'PASS' if not failed else 'FAIL: ' + ', '.join(failed)}")
+        log(f"  {set_name:9s} {case:9s} {'PASS' if not failed else 'FAIL: ' + ', '.join(failed)}")
     return ok_all
+
+
+def gate_operating_points(df, case):
+    """Boolean masks of rows at the operating points transistors have inside static gates."""
+    mos_type = config.CASES[case]["type"]
+    vdd, vd, vs = df["vdd"], df["vd"], df["vs"]
+    at_vdd = lambda v: v >= (1 - RAIL_TOL) * vdd
+    at_zero = lambda v: v <= RAIL_TOL * vdd
+    if case.endswith("_on"):
+        own_rail = at_vdd if mos_type == "pmos" else at_zero
+        small = (vd - vs).abs() < ON_VDS_MAX
+        return {f"|Vds| < {ON_VDS_MAX * 1e3:g} mV": small,
+                f"|Vds| < {ON_VDS_MAX * 1e3:g} mV, terminal on rail": small & (own_rail(vd) | own_rail(vs))}
+    full_rail = (at_vdd(vd) & at_zero(vs)) | (at_zero(vd) & at_vdd(vs))
+    return {"terminals on opposite rails": full_rail,
+            "one terminal on a rail": at_vdd(vd) | at_zero(vd) | at_vdd(vs) | at_zero(vs)}
+
+
+def coverage_table(sets):
+    rows = []
+    for case in config.CASES:
+        for label in gate_operating_points(sets["uniform"][case], case):
+            row = {"case": case, "operating point": label}
+            for s, data in sets.items():
+                row[f"{s} rows"] = int(gate_operating_points(data[case], case)[label].sum())
+            rows.append(row)
+    table = pd.DataFrame(rows)
+    table.to_csv(OUT_DIR / "coverage.csv", index=False)
+    log(f"\nCoverage of gate operating points (rail = within {RAIL_TOL:.0%} of 0 or VDD)")
+    log(table.to_string(index=False))
+    return table
 
 
 # ---------------------------------------------------------------- controlled sweeps
@@ -150,23 +205,48 @@ def trend_plot(data, cases, param, current, xlabel, ylabel, title, filename, xsc
     return trends
 
 
-def kcl_plot(data):
-    fig, axes = plt.subplots(1, 4, figsize=(16, 3.6), sharey=True)
-    bins = np.linspace(-20, -4, 65)
-    for ax, (case, df) in zip(axes, data.items()):
-        currents = df[CURRENTS].to_numpy()
-        rel = np.abs(currents.sum(axis=1)) / np.abs(currents).max(axis=1)
-        ax.hist(np.log10(np.maximum(rel, 1e-20)), bins=bins, color=SAMPLE_COLOR,
-                edgecolor="#fcfcfb", linewidth=0.5)
-        ax.axvline(np.log10(KCL_LIMIT), color=INK_2, linewidth=1)
-        ax.text(np.log10(KCL_LIMIT), 0.97, "limit ", color=INK_2, va="top", ha="right",
-                transform=ax.get_xaxis_transform())
-        ax.set_title(case.replace("_", " ").upper())
-        ax.set_xlabel(r"log$_{10}$ ( |Id+Ig+Is+Ib| / max|I| )")
-    axes[0].set_ylabel("samples")
-    fig.suptitle("Kirchhoff check: relative current residual per sample", fontsize=12, x=0.01, ha="left")
+def kcl_plot(sets):
+    """Residual divided by the allowed residual: a sample passes when the ratio is <= 1."""
+    fig, axes = plt.subplots(len(sets), 4, figsize=(16, 3.4 * len(sets)), sharex=True)
+    bins = np.linspace(-14, 1, 61)
+    for row, (s, data) in zip(axes, sets.items()):
+        for ax, (case, df) in zip(row, data.items()):
+            residual, scale = kcl_residual(df)
+            ratio = residual / (KCL_LIMIT * scale + KCL_ABS)
+            ax.hist(np.log10(np.maximum(ratio, 1e-14)), bins=bins, color=SAMPLE_COLOR,
+                    edgecolor="#fcfcfb", linewidth=0.5)
+            ax.axvline(0, color=INK_2, linewidth=1)
+            ax.text(0, 0.97, "limit ", color=INK_2, va="top", ha="right",
+                    transform=ax.get_xaxis_transform())
+            ax.set_title(f"{case.replace('_', ' ').upper()}  ({s})")
+        row[0].set_ylabel("samples")
+    for ax in axes[-1]:
+        ax.set_xlabel(r"log$_{10}$ ( |Id+Ig+Is+Ib| / allowed )")
+    fig.suptitle(f"Kirchhoff check: residual / ({KCL_LIMIT:g}·max|I| + {KCL_ABS:g} A) per sample",
+                 fontsize=12, x=0.01, ha="left")
     fig.tight_layout()
     fig.savefig(OUT_DIR / "kcl_check.png", dpi=150)
+    plt.close(fig)
+
+
+def coverage_plot(sets):
+    """Vd vs Vs (as fractions of VDD) for the uniform and targeted sets."""
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4.4))
+    colors = {"uniform": SAMPLE_COLOR, "targeted": SWEEP_COLOR}
+    for ax, case in zip(axes, config.CASES):
+        for s, data in sets.items():
+            df = data[case]
+            ax.scatter(df["vs"] / df["vdd"], df["vd"] / df["vdd"], s=3, alpha=0.25, linewidths=0,
+                       color=colors[s], label=f"{s} ({len(df):,})", rasterized=True)
+        ax.set_title(case.replace("_", " ").upper())
+        ax.set_xlabel("Vs / VDD")
+        ax.set_aspect("equal")
+    axes[0].set_ylabel("Vd / VDD")
+    axes[0].legend(loc="upper left", markerscale=5)
+    fig.suptitle("Terminal-voltage coverage: uniform (spec) vs targeted (gate operating points)",
+                 fontsize=12, x=0.01, ha="left")
+    fig.tight_layout()
+    fig.savefig(OUT_DIR / "coverage.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -180,13 +260,16 @@ def describe(trend):
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    data = load_datasets()
+    sets = load_datasets()
+    data = sets["uniform"]
 
-    kcl = kcl_check(data)
-    sane = sanity_checks(data)
-    kcl_plot(data)
+    kcl = kcl_check(sets)
+    sane = sanity_checks(sets)
+    kcl_plot(sets)
+    coverage_table(sets)
+    coverage_plot(sets)
 
-    log("\nTrend checks (controlled sweeps)")
+    log("\nTrend checks (controlled sweeps, uniform dataset scatter)")
     expected = []
     t = trend_plot(data, ["nmos_off", "pmos_off"], "temp", "id",
                    "temperature (°C)", "|Id| (A)", "OFF current vs temperature",

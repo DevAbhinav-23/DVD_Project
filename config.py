@@ -41,6 +41,10 @@ CASES = {
 
 # ---------------------------------------------------------------- dataset
 N_SAMPLES = 10_000
+# Targeted samples per case (data/<case>_targeted.csv): terminal voltages placed where
+# transistors sit inside static gates (ON: |Vds| ~ 0; OFF: terminals at or near the rails),
+# which uniform Vd, Vs sampling almost never reaches. Kept separate from the spec datasets.
+N_TARGETED = 5_000
 CSV_COLUMNS = ["vdd", "temp", "w", "vd", "vs", "vg", "vb",
                "vth0", "toxe", "ndep", "u0", "xj",
                "id", "ig", "is", "ib"]
@@ -51,6 +55,10 @@ SEEDS = {
     "nmos_off": 102,
     "pmos_on": 103,
     "pmos_off": 104,
+    "nmos_on_targeted": 201,
+    "nmos_off_targeted": 202,
+    "pmos_on_targeted": 203,
+    "pmos_off_targeted": 204,
     "split": 42,        # Part 2: train / validation / test split
     "corners": 2026,    # Part 3 and 4: the 200 shared PVT corners
 }

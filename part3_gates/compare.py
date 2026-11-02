@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "part2_models"))
 import config
-from gates import CASES, GATES, TERMINALS, leakage, node_voltages, nodes
+from gates import CASES, GATES, TERMINALS, leakage, leakage_vdd_terminals, node_voltages, nodes
 from leakage_model import INPUTS, TARGETS, load_case_model
 
 matplotlib.use("Agg")
@@ -55,7 +55,7 @@ def transistor_inputs(spice, vg_mode):
     return pd.concat(parts, ignore_index=True)
 
 
-def predict_leakage(spice, models, vg_mode, include_inputs=False):
+def predict_leakage(spice, models, vg_mode, include_inputs=False, formula=leakage):
     """ML gate leakage for every simulation (same formula as the SPICE oracle check)."""
     fets = transistor_inputs(spice, vg_mode)
     fets[TARGETS] = np.nan
@@ -66,7 +66,7 @@ def predict_leakage(spice, models, vg_mode, include_inputs=False):
 
     out = pd.Series(np.nan, index=spice.index)
     for (gate, bits), g in spice.groupby(["gate", "inputs"]):
-        out[g.index] = leakage(gate, bits, wide.loc[g.index], include_inputs)
+        out[g.index] = formula(gate, bits, wide.loc[g.index], include_inputs)
     return out
 
 
@@ -125,6 +125,8 @@ def main():
     pred["ml_leak_actual_vg"] = predict_leakage(spice, models, "actual")
     pred["spice_leak_with_inputs"] = spice["i_supply"] + spice["i_in_vdd"]
     pred["ml_leak_with_inputs"] = predict_leakage(spice, models, "rail", include_inputs=True)
+    pred["ml_leak_vdd_terminals"] = predict_leakage(spice, models, "rail",
+                                                    formula=leakage_vdd_terminals)
     pred["rel_err"] = (pred["ml_leak"] - pred["spice_leak"]) / pred["spice_leak"]
     pred.to_csv(OUT_DIR / "gate_predictions.csv", index=False)
 
@@ -132,7 +134,8 @@ def main():
     table.to_csv(OUT_DIR / "gate_table.csv", index=False)
     variants = {"main (Vg at rail)": ("ml_leak", "spice_leak"),
                 "recorded Vg": ("ml_leak_actual_vg", "spice_leak"),
-                "supply + inputs at VDD": ("ml_leak_with_inputs", "spice_leak_with_inputs")}
+                "supply + inputs at VDD": ("ml_leak_with_inputs", "spice_leak_with_inputs"),
+                "previous formula (VDD terminals)": ("ml_leak_vdd_terminals", "spice_leak")}
     var_table = table[["gate", "inputs"]].copy()
     for label, (ml_col, spice_col) in variants.items():
         t = results_table(pred, ml_col, spice_col)
@@ -141,7 +144,7 @@ def main():
 
     md = ["## Gate leakage: ML vs SPICE (leakage = current drawn from VDD, 200 corners per row)", "",
           table.to_markdown(index=False, floatfmt=".4g"), "",
-          "## Variants (Vg handling and leakage definition)", "",
+          "## Variants (Vg handling, leakage definition, previous formula)", "",
           var_table.to_markdown(index=False), ""]
     (OUT_DIR / "gate_table.md").write_text("\n".join(md))
 

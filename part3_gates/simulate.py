@@ -16,7 +16,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 from corners import load_corners
-from gates import CASES, GATES, build_netlist, leakage, run_jobs
+from gates import CASES, GATES, build_netlist, leakage, leakage_vdd_terminals, run_jobs
 
 OUT_DIR = config.RESULTS_DIR / "part3"
 NETLIST_DIR = Path(__file__).resolve().parent / "netlists"
@@ -35,15 +35,16 @@ def write_example_netlists(corners):
 def oracle_check(df):
     """Run the SPICE terminal currents through the leakage formula and compare with SPICE."""
     lines, worst = [], 0.0
-    for include_inputs, target in [(False, df["i_supply"]),
-                                   (True, df["i_supply"] + df["i_in_vdd"])]:
-        summed = pd.Series(np.nan, index=df.index)
-        for (gate, bits), g in df.groupby(["gate", "inputs"]):
-            summed[g.index] = leakage(gate, bits, g, include_inputs)
-        rel = ((summed - target).abs() / target.abs()).max()
-        worst = max(worst, rel)
-        name = "supply + inputs at VDD" if include_inputs else "supply only"
-        lines.append(f"  {name:24s} max |formula - SPICE| / |SPICE| = {rel:.2e}")
+    for formula, label in [(leakage, "formula"), (leakage_vdd_terminals, "previous (VDD terminals)")]:
+        for include_inputs, target in [(False, df["i_supply"]),
+                                       (True, df["i_supply"] + df["i_in_vdd"])]:
+            summed = pd.Series(np.nan, index=df.index)
+            for (gate, bits), g in df.groupby(["gate", "inputs"]):
+                summed[g.index] = formula(gate, bits, g, include_inputs)
+            rel = ((summed - target).abs() / target.abs()).max()
+            worst = max(worst, rel)
+            name = "supply + inputs at VDD" if include_inputs else "supply only"
+            lines.append(f"  {label:26s} {name:24s} max |formula - SPICE| / |SPICE| = {rel:.2e}")
     status = "PASS" if worst < ORACLE_TOL else "FAIL"
     return [f"Oracle check ({status}, limit {ORACLE_TOL:g}), {len(df)} simulations:"] + lines
 

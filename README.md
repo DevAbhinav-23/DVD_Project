@@ -23,8 +23,8 @@ docs/                   # project specification (DVD_ML_PROJECT.pdf)
 part1_dataset/
   netlists/             # example single-transistor netlists (nmos_on/off, pmos_on/off .cir)
   spice_utils.py        # build a sample netlist, run ngspice, read back Id, Ig, Is, Ib
-  generate.py           # draw samples and simulate -> data/*.csv
-  validate.py           # KCL check, sanity checks, trend plots -> results/part1/
+  generate.py           # draw samples and simulate -> data/<case>.csv, data/<case>_targeted.csv
+  validate.py           # KCL, sanity, coverage checks and trend plots -> results/part1/
 part2_models/
   leakage_model.py      # features, log10|I| + sign target, saved CaseModel (load_case_model)
   train_compare.py      # 4 model families x 4 cases -> comparison table, chosen models, plots
@@ -36,7 +36,7 @@ part3_gates/
   simulate.py           # 18 cases x 200 corners in SPICE + oracle check -> results/part3/
   compare.py            # ML gate leakage vs SPICE -> results table, parity plot
 data/                   # generated datasets (Part 1 CSVs) and the corner table
-results/part1/          # Part 1 plots, KCL summary, validation summary
+results/part1/          # Part 1 plots, KCL and coverage summaries, validation summary
 results/part2/          # Part 2 tables, plots and the four saved models
 results/part3/          # Part 3 SPICE records, predictions, gate table, oracle check, parity plot
 ```
@@ -51,14 +51,39 @@ python3 -m venv .venv
 
 ## Running Part 1
 ```
-.venv/bin/python part1_dataset/generate.py    # ~15 s on 12 cores, writes data/*.csv
+.venv/bin/python part1_dataset/generate.py    # ~25 s on 12 cores, writes both datasets to data/
 .venv/bin/python part1_dataset/validate.py    # writes results/part1/
 ```
 Both scripts use the fixed seeds in `config.py`, so a rerun reproduces byte-identical CSVs.
-`generate.py --cases nmos_on --n 1000` regenerates a single case or a smaller set.
+`generate.py --set uniform|targeted|both`, `--cases nmos_on ...`, `--n` and `--n-targeted` regenerate a subset.
+
+### Datasets
+| Files | Rows per case | Terminal voltages |
+|---|---|---|
+| `data/<case>.csv` (spec deliverable) | 10,000 | Vd, Vs uniform in [0, VDD], as the spec requires |
+| `data/<case>_targeted.csv` | 5,000 | Where transistors sit inside static gates (below) |
+
+VDD, temperature and the process parameters are drawn the same way in both; `<case>` is
+`nmos_on`, `nmos_off`, `pmos_on` or `pmos_off`.
+
+**Why the targeted set exists.** Inside a gate, an ON transistor carries only leakage, so its
+|Vds| is a few mV or less, often with one terminal on its rail; OFF transistors have their terminals
+at or near 0 and VDD. Uniform Vd, Vs almost never lands there (e.g. 3 of 10,000 PMOS ON rows have
+|Vds| < 4 mV with a terminal on VDD), so models trained only on the uniform set are untested exactly
+where Parts 3 and 4 use them. The targeted set fills those regions:
+- **ON:** one terminal (drain or source, at random) on the device's own rail (VDD for PMOS, 0 for
+  NMOS) half the time, else uniform; the other a log-uniform |Vds| of 0.1 µV–50 mV away, either sign.
+- **OFF:** each of Vd, Vs exactly at 0 (30%), exactly at VDD (30%), 1 µV–100 mV off a rail (20%) or
+  uniform (20%). If both land on the same rail, Vs is moved just off it (an all-terminals-equal OFF
+  device never occurs in a gate).
+- **W:** half at `config.GATE_W` (the gate width), half uniform.
+
+The ranges come from circuit behaviour, not from the Part 3 SPICE results (those are evaluation-only).
+[results/part1/coverage.csv](results/part1/coverage.csv) and `coverage.png` compare the two sets.
 
 ### Dataset notes (for Part 2)
-- **Files:** `data/nmos_on.csv`, `nmos_off.csv`, `pmos_on.csv`, `pmos_off.csv`, 10,000 rows each.
+- **Training:** train on both sets combined, and report test accuracy separately on a held-out slice of
+  the targeted set: the uniform test set does not measure accuracy at the gate operating points.
 - **Columns:** `vdd, temp, w, vd, vs, vg, vb, vth0, toxe, ndep, u0, xj` (inputs) and `id, ig, is, ib` (targets).
 - **Units:** SI (V, m, A, m⁻³ for ndep, m²/Vs for u0); `temp` in °C.
 - **Signs:** current flowing *into* the terminal is positive. Signs do change within a case:
@@ -66,11 +91,18 @@ Both scripts use the fixed seeds in `config.py`, so a rerun reproduces byte-iden
   gate leakage is comparable to channel leakage, so Id is not simply −Is.
 - **Range:** |I| spans about 1e-17 to 5e-4 A, so predict log10|I| and the sign separately.
 - **Constant columns:** `vg` and `vb` are fixed per case (equal to `vdd` or 0), so they add no information within a case.
+- **Numerical floor:** currents below about 1e-14 A are at SPICE's numerical floor. In the targeted OFF sets,
+  where a device's terminals are within µV of its gate and body, Ig and Ib can be exactly 0 or ~1e-15 A noise
+  (123 PMOS OFF rows); clip |I| at about 1e-14 A rather than fitting that noise.
 
 ### Validation results
 All checks pass ([results/part1/validation_summary.txt](results/part1/validation_summary.txt)).
-- **KCL:** worst residual |Id+Ig+Is+Ib| / max|I| is 2.7e-4, below the 1e-3 limit (10× below the 1% accuracy target).
+- **KCL:** a row passes when |Id+Ig+Is+Ib| ≤ 1e-3 · max|I| + 1e-13 A (relative plus absolute, like SPICE's
+  reltol / abstol). 1e-3 is 10× below the 1% accuracy target; 0.1 pA is 0.1% of 0.1 nA, below every gate
+  leakage we evaluate. All rows of both sets pass; the largest residual is 0.011 pA.
   The residual is a few-fA floor in the BSIM4 model's current bookkeeping: it appears only where every current is in the pA range, and it is unchanged when the solver tolerances are tightened 1000×.
+- **Coverage:** e.g. PMOS ON rows with |Vds| < 4 mV and a terminal on VDD: 3 (uniform) vs 2,025 (targeted);
+  NMOS OFF rows with terminals on opposite rails: 5 vs 1,471.
 - **Trends (controlled sweeps at nominal, |Vds| = VDD):** OFF current rises with temperature and falls as |vth0| grows; |Ig| falls as toxe grows.
 
 ## Running Part 2
@@ -143,31 +175,43 @@ currents = m.predict(df)   # df with the 12 input columns -> DataFrame id, ig, i
   are exactly 0 or VDD, and the ON / OFF model is picked from the gate voltage (above or below VDD/2).
   Vg is passed to the model at the rail it was trained at; feeding the recorded Vg instead is
   reported as a variant.
-- **Leakage:** the sum of the currents into every transistor terminal tied to VDD
-  (`part3_gates/gates.py:leakage`), the same formula for SPICE and ML.
+- **Leakage** (`part3_gates/gates.py:leakage`, the same formula for SPICE and ML): the current
+  drawn from VDD, computed **without any ON transistor's drain or source current**. Inside a gate an
+  ON transistor sits at |Vds| ≈ 0 and only carries the leakage of the rest of the gate; the transistor
+  models are unreliable there (the PMOS ON model gets Is's sign wrong in every run). So:
+  - each ON transistor's channel is one unknown t (its drain current); its source current follows from
+    its own KCL, is = −(ig + ib) − t. Its gate and body currents are used as predicted;
+  - OFF transistors use all four predicted currents;
+  - KCL at every internal node (out, x, y, nand_out, nor_out) solves the unknowns, and the VDD current
+    is the sum at the VDD node. Only combinations KCL determines may enter (e.g. the sum of two
+    parallel ON PMOS); the function raises an error otherwise.
+
+  `leakage_vdd_terminals` keeps the previous formula (sum of every terminal current at VDD) for comparison.
 - **Oracle check** (`results/part3/oracle_check.txt`): on the SPICE terminal currents the formula
-  reproduces −i(Vsupply) to 9e-16, below the 1e-6 limit.
+  reproduces −i(Vsupply) to 7e-7, below the 1e-6 limit (the previous formula: 9e-16). The difference
+  is each ON transistor's own KCL residual in SPICE, the same few-fA floor as in the Part 1 KCL check,
+  relative to ~10 nA of gate leakage.
 
 ### Results
-Over all 3,600 gate runs: median error 132%, 95th percentile 275%
-(`results/part3/gate_table.md`, `plots/gate_parity.png`). The cases split into two groups:
-- **No ON PMOS on VDD** (INV 1, NAND2 11, NOR2 10, NOR2 11): median 6.5–9.0%, p95 18–31%. The
-  leakage comes from OFF PMOS at |Vds| ≈ VDD, where only about 1% of the training rows lie
-  (Vd and Vs are drawn independently); the Part 2 OFF models' error there is about 4% instead of 1.4%.
-- **An ON PMOS on VDD** (the other 14 cases): the ML leakage has the wrong sign, 80–210% median
-  error. The ON PMOS sits at |Vds| ≤ 4.3 mV, so its Is is only the OFF network's leakage (~1e-8 A),
-  far below its normal ON current. The PMOS ON model predicts that Is with the wrong sign in every
-  run. On the Part 2 test set its Is error for |Vds| < 10 mV is 21% (sign right in 73%) against 1–2%
-  elsewhere, and only 44 of the 10,000 training rows have |Vds| < 2 mV. Fixing this needs a better
-  PMOS / NMOS ON model near Vds = 0 (Part 2), e.g. more training samples there.
+Over all 3,600 gate runs, with the current Part 2 models: **median error 4.4%, 95th percentile 18%,
+bias −1.1%** (`results/part3/gate_table.md`, `plots/gate_parity.png`). Every case has the right sign;
+the per-case median error is 2.7–9.0%.
+- **Formula change:** with the previous formula (VDD terminals) the same models gave a 132% median
+  error, wrong-signed in the 14 cases with an ON PMOS on VDD (variants table, last column).
+- **Remaining error** comes from the OFF transistors at the rails (|Vds| ≈ VDD, or terminals near
+  0 / VDD), where the uniform training data is thin: the OFF models' error there is about 10–16% per
+  terminal. The Part 1 targeted dataset (`data/<case>_targeted.csv`) covers these points; retraining
+  Part 2 on it is the next step.
+- **Least accurate:** NOR2 11 (median 9.0%, p95 31%), where the leakage is the smallest (~0.7 nA) and
+  flows through two series OFF PMOS; INV 1 and NAND2 11 (7.9%), carried by OFF PMOS at |Vds| = VDD.
 - **AND2 / OR2 inverter input:** the internal NAND / NOR output is at most 1.8% of VDD off the rail.
-  Feeding the recorded Vg instead of the rail value changes the median error by less than 1 point.
+  Feeding the recorded Vg instead of the rail value changes the median error by less than 0.2 points.
 - **Input-source current (TA question 3):** counting the gate current drawn from inputs held at VDD
-  is in the variants table of `gate_table.md`.
+  gives a 3.4% median error (variants table of `gate_table.md`).
 
 ## Conventions (fix these before writing code)
 - **Current sign:** current flowing *into* a terminal is positive. The KCL check is then `Id + Ig + Is + Ib ≈ 0`.
-- **Leakage definition:** gate and circuit leakage = static current drawn from the VDD supply. On the ML side this is the sum of the predicted currents of every transistor terminal tied to VDD. SPICE and ML must use exactly the same definition.
+- **Leakage definition:** gate and circuit leakage = static current drawn from the VDD supply. On the ML side it is computed by KCL from the OFF transistors' currents and every transistor's gate and body currents, never from an ON transistor's drain or source current (`part3_gates/gates.py:leakage`). SPICE and ML must use exactly the same definition.
 - **Gate current through the inputs:** input sources at VDD also supply gate-tunnelling current. Whether that counts as leakage is an open TA question (see below). Whatever we decide is applied to both SPICE and ML.
 - **Error metric:** relative error `|ML − SPICE| / |SPICE|`. Bias = signed median of `(ML − SPICE) / SPICE`.
 - **Netlist options:** every netlist (transistor, gate and circuit) includes
@@ -246,7 +290,7 @@ Goal: Check whether the transistor models can accurately estimate gate leakage.
 5. ML prediction:
    - build each transistor's (Vd, Vg, Vs, Vb) from the recorded node voltages;
    - pick the ON or OFF model from the gate voltage (for example, an NMOS with its gate at VDD uses NMOS ON);
-   - predict the currents and sum them into the gate leakage.
+   - predict the currents and combine them into the gate leakage by KCL, without the drain/source currents of ON transistors (see Running Part 3 → Method).
 
    Optional: also solve the internal nodes with the ML models by KCL (depends on TA question 2).
 6. Compare ML against SPICE. For each of the 18 cases, report the SPICE median, ML median, bias, median error and 95th-percentile error. Plot ML against SPICE for every gate simulation on log axes.

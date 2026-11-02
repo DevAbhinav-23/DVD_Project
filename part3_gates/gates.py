@@ -13,6 +13,8 @@ import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "part1_dataset"))
@@ -85,20 +87,78 @@ def node_voltages(gate, bits, vdd, solved):
     return volts
 
 
-def leakage(gate, bits, currents, include_inputs=False):
-    """Static current drawn from VDD: the sum of the currents INTO every transistor terminal
-    tied to the VDD node. With include_inputs, terminals on inputs held at VDD also count
-    (gate tunnelling supplied by the input sources).
+def on_devices(gate, bits):
+    """Names of the transistors that are ON for these inputs (from the logic levels)."""
+    a, b = (int(c) for c in bits.ljust(2, "0"))
+    level = {"0": 0, "vdd": 1, "a": a, "b": b, "nand_out": 1 - (a & b), "nor_out": 1 - (a | b)}
+    return {name for name, mos_type, _, g, _, _ in GATES[gate]
+            if level[g] == (1 if mos_type == "nmos" else 0)}
 
-    currents maps "<fet>_<id|ig|is|ib>" to amps (scalars, arrays or DataFrame columns), so the
-    same formula serves the SPICE oracle check and the ML prediction.
-    """
+
+def _supply_rails(gate, bits, include_inputs):
     rails = {"vdd"}
     if include_inputs:
         rails |= {n for n, bit in zip(inputs(gate), bits) if bit == "1"}
+    return rails
+
+
+def leakage_vdd_terminals(gate, bits, currents, include_inputs=False):
+    """Previous formula, kept for comparison: the sum of the currents INTO every transistor
+    terminal tied to VDD. Exact for SPICE currents, but when the output is high it relies on the
+    drain/source currents of ON transistors at |Vds| ~ 0, which the transistor models predict
+    poorly (wrong sign in the gate operating region)."""
+    rails = _supply_rails(gate, bits, include_inputs)
     return sum(currents[f"{name}_{c}"]
                for name, _, *terms in GATES[gate]
                for node, c in zip(terms, CURRENTS) if node in rails)
+
+
+def leakage(gate, bits, currents, include_inputs=False):
+    """Static current drawn from VDD, without using any ON transistor's drain or source current.
+
+    Each ON transistor's channel enters as one unknown t (its drain current); its source current
+    follows from its own KCL, is = -(ig + ib) - t. OFF transistors use all four currents and ON
+    transistors their gate and body currents. KCL at every internal node fixes the unknowns, so
+    each ON transistor carries exactly what the OFF devices and the gate/body currents push
+    through it. The VDD current is then the sum at the VDD node. With include_inputs, terminals
+    on inputs held at VDD also count (gate tunnelling supplied by the input sources).
+
+    By KCL this equals leakage_vdd_terminals() exactly for SPICE currents (the oracle check).
+    currents maps "<fet>_<id|ig|is|ib>" to amps (scalars, arrays or DataFrame columns), so the
+    same formula serves the SPICE oracle check and the ML prediction.
+    """
+    on = sorted(on_devices(gate, bits))
+
+    def node_sum(node):
+        """Sum of currents into the terminals at node: known part + coefficients on the unknowns."""
+        known, coef = 0.0, np.zeros(len(on))
+        for name, _, *terms in GATES[gate]:
+            for t, n, c in zip(TERMINALS, terms, CURRENTS):
+                if n != node:
+                    continue
+                if name in on and t == "d":
+                    coef[on.index(name)] += 1
+                elif name in on and t == "s":
+                    coef[on.index(name)] -= 1
+                    known = known - currents[f"{name}_ig"] - currents[f"{name}_ib"]
+                else:
+                    known = known + currents[f"{name}_{c}"]
+        return known, coef
+
+    # KCL at the internal nodes: A t = -known
+    rows = [node_sum(n) for n in nodes(gate)]
+    A = np.array([coef for _, coef in rows]).reshape(len(rows), len(on))
+    A_pinv = np.linalg.pinv(A)
+    t = [sum(-A_pinv[k, j] * known for j, (known, _) in enumerate(rows)) for k in range(len(on))]
+
+    total = 0.0
+    for rail in _supply_rails(gate, bits, include_inputs):
+        known, coef = node_sum(rail)
+        # Only combinations of t that KCL determines may enter (e.g. the sum of parallel ON PMOS)
+        if not np.allclose(coef @ (np.eye(len(on)) - A_pinv @ A), 0):
+            raise ValueError(f"{gate} {bits}: supply current depends on an undetermined ON current")
+        total = total + known + sum(coef[k] * t[k] for k in range(len(on)))
+    return total
 
 
 def measurements(gate):

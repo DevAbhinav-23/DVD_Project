@@ -1,0 +1,9 @@
+case,operating point,uniform rows,targeted rows
+nmos_on,|Vds| < 4 mV,84,4040
+nmos_on,"|Vds| < 4 mV, terminal on rail",0,2019
+nmos_off,terminals on opposite rails,5,1471
+nmos_off,one terminal on a rail,400,4715
+pmos_on,|Vds| < 4 mV,80,3987
+pmos_on,"|Vds| < 4 mV, terminal on rail",3,2025
+pmos_off,terminals on opposite rails,4,1458
+pmos_off,one terminal on a rail,401,4724
