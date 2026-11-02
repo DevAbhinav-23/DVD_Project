@@ -1,18 +1,34 @@
-| case     | family   | terminal   |   r2_log |   median_err_pct |   p95_err_pct |   mean_err_pct |   sign_acc |
-|:---------|:---------|:-----------|---------:|-----------------:|--------------:|---------------:|-----------:|
-| nmos_on  | mlp      | id         |   0.9983 |           1.236  |         7.751 |         3.08   |     0.9947 |
-| nmos_on  | mlp      | ig         |   0.9996 |           1.295  |         7.748 |         2.305  |     1      |
-| nmos_on  | mlp      | is         |   0.9987 |           1.303  |         7.309 |         2.873  |     0.996  |
-| nmos_on  | mlp      | ib         |   0.9999 |           1.48   |         6.713 |         2.209  |     1      |
-| nmos_off | mlp      | id         |   0.9947 |           1.647  |         9.836 |         4.083  |     0.9887 |
-| nmos_off | mlp      | ig         |   0.9997 |           1.18   |         4.719 |         1.662  |     1      |
-| nmos_off | mlp      | is         |   0.9952 |           1.577  |        11.64  |         4.541  |     0.9847 |
-| nmos_off | mlp      | ib         |   0.9682 |           0.2342 |         2.63  |         1.128  |     1      |
-| pmos_on  | mlp      | id         |   0.9992 |           1.039  |         6.737 |         2.516  |     0.9953 |
-| pmos_on  | mlp      | ig         |   0.9995 |           1.172  |         6.95  |         2.2    |     1      |
-| pmos_on  | mlp      | is         |   0.9985 |           1.181  |         6.725 |         2.589  |     0.994  |
-| pmos_on  | mlp      | ib         |   0.9999 |           1.618  |         6.263 |         2.24   |     1      |
-| pmos_off | mlp      | id         |   0.9953 |           1.531  |        10.46  |         4.273  |     0.9853 |
-| pmos_off | mlp      | ig         |   0.9998 |           1.145  |         4.702 |         1.583  |     1      |
-| pmos_off | mlp      | is         |   0.9974 |           1.597  |         8.663 |         3.687  |     0.99   |
-| pmos_off | mlp      | ib         |   0.9776 |           0.2356 |         2.185 |         0.9082 |     1      |
+| case     | test_set   | family   | terminal   |   r2_log |   median_err_pct |   p95_err_pct |   mean_err_pct |   sign_acc |
+|:---------|:-----------|:---------|:-----------|---------:|-----------------:|--------------:|---------------:|-----------:|
+| nmos_on  | uniform    | mlp      | id         |   0.998  |           2.236  |         8.76  |         3.206  |     0.9993 |
+| nmos_on  | uniform    | mlp      | ig         |   0.9998 |           1.334  |         6.274 |         2.021  |     1      |
+| nmos_on  | uniform    | mlp      | is         |   0.9969 |           2.191  |         8.585 |         3.215  |     1      |
+| nmos_on  | uniform    | mlp      | ib         |   0.9999 |           1.901  |         6.284 |         2.45   |     1      |
+| nmos_on  | targeted   | mlp      | id         |   0.9791 |           6.427  |        76.32  |        17.24   |     0.988  |
+| nmos_on  | targeted   | mlp      | ig         |   0.9996 |           2.138  |        10.47  |         3.289  |     1      |
+| nmos_on  | targeted   | mlp      | is         |   0.9702 |           6.762  |       111.5   |        18.27   |     0.9813 |
+| nmos_on  | targeted   | mlp      | ib         |   0.9998 |           2.477  |         8.992 |         3.286  |     1      |
+| nmos_off | uniform    | mlp      | id         |   0.9963 |           1.885  |         9.674 |         3.716  |     0.9967 |
+| nmos_off | uniform    | mlp      | ig         |   0.9996 |           1.505  |         5.917 |         2.068  |     1      |
+| nmos_off | uniform    | mlp      | is         |   0.9939 |           1.82   |         9.218 |         3.959  |     0.99   |
+| nmos_off | uniform    | mlp      | ib         |   0.9962 |           0.3961 |         3.484 |         0.9074 |     1      |
+| nmos_off | targeted   | mlp      | id         |   0.9998 |           2.403  |         9.158 |         3.51   |     0.9987 |
+| nmos_off | targeted   | mlp      | ig         |   0.9998 |           2.285  |        13.82  |         3.822  |     1      |
+| nmos_off | targeted   | mlp      | is         |   0.9993 |           2.298  |        11.54  |         3.969  |     0.9973 |
+| nmos_off | targeted   | mlp      | ib         |   0.9968 |           0.84   |        15.1   |         3.032  |     1      |
+| pmos_on  | uniform    | mlp      | id         |   0.9996 |           2.024  |         7.326 |         2.779  |     1      |
+| pmos_on  | uniform    | mlp      | ig         |   0.9998 |           1.255  |         5.689 |         1.931  |     1      |
+| pmos_on  | uniform    | mlp      | is         |   0.9996 |           1.916  |         7.516 |         2.846  |     1      |
+| pmos_on  | uniform    | mlp      | ib         |   0.9999 |           2.258  |         7.413 |         2.849  |     1      |
+| pmos_on  | targeted   | mlp      | id         |   0.9687 |           7.497  |       102.6   |        18.94   |     0.984  |
+| pmos_on  | targeted   | mlp      | ig         |   0.9996 |           2.079  |        10.63  |         3.209  |     1      |
+| pmos_on  | targeted   | mlp      | is         |   0.9691 |           6.894  |        93.74  |        18.44   |     0.9853 |
+| pmos_on  | targeted   | mlp      | ib         |   0.9999 |           2.63   |        10.24  |         3.65   |     1      |
+| pmos_off | uniform    | mlp      | id         |   0.9971 |           1.967  |         9.033 |         3.659  |     0.9947 |
+| pmos_off | uniform    | mlp      | ig         |   0.9996 |           1.554  |         6.071 |         2.144  |     1      |
+| pmos_off | uniform    | mlp      | is         |   0.9962 |           1.93   |         9.472 |         3.867  |     0.994  |
+| pmos_off | uniform    | mlp      | ib         |   0.9889 |           0.3827 |         3.254 |         0.9634 |     1      |
+| pmos_off | targeted   | mlp      | id         |   0.9998 |           2.2    |         8.988 |         3.154  |     1      |
+| pmos_off | targeted   | mlp      | ig         |   0.9992 |           2.374  |        13.8   |         4.911  |     0.9905 |
+| pmos_off | targeted   | mlp      | is         |   0.9998 |           2.193  |         9.931 |         3.361  |     1      |
+| pmos_off | targeted   | mlp      | ib         |   0.9936 |           0.7855 |        14.77  |         3.243  |     1      |
