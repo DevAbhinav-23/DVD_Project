@@ -4,10 +4,10 @@ For every simulation in results/part3/spice_gates.csv, each transistor's (Vd, Vg
 built from the SPICE-recorded node voltages, the ON or OFF model is picked from its gate voltage,
 and the predicted terminal currents are summed with the same leakage formula as the oracle check.
 
-Vg handling: the transistor models were trained with Vg exactly at 0 or VDD. Inputs are exactly
-at a rail, but in AND2 / OR2 the inverter is driven by the internal NAND / NOR output, a few mV
-off the rail. The main result ("rail") snaps Vg to the rail the model was trained at; "actual"
-feeds the recorded Vg instead and is reported for the error analysis.
+Vg handling: inputs are exactly at a rail, but in AND2 / OR2 the inverter is driven by the
+internal NAND / NOR output, a few mV off the rail. The main result ("actual") feeds that recorded
+Vg, as the spec asks (terminal voltages from the recorded node voltages). "rail" snaps Vg to the
+rail the models were trained at and is reported for the error analysis.
 
 Usage:  python part3_gates/compare.py      # needs part3_gates/simulate.py first
 """
@@ -121,19 +121,19 @@ def main():
 
     pred = spice[["gate", "inputs", "corner", "vdd", "temp"]].copy()
     pred["spice_leak"] = spice["i_supply"]
-    pred["ml_leak"] = predict_leakage(spice, models, "rail")
-    pred["ml_leak_actual_vg"] = predict_leakage(spice, models, "actual")
+    pred["ml_leak"] = predict_leakage(spice, models, "actual")
+    pred["ml_leak_rail_vg"] = predict_leakage(spice, models, "rail")
     pred["spice_leak_with_inputs"] = spice["i_supply"] + spice["i_in_vdd"]
-    pred["ml_leak_with_inputs"] = predict_leakage(spice, models, "rail", include_inputs=True)
-    pred["ml_leak_vdd_terminals"] = predict_leakage(spice, models, "rail",
+    pred["ml_leak_with_inputs"] = predict_leakage(spice, models, "actual", include_inputs=True)
+    pred["ml_leak_vdd_terminals"] = predict_leakage(spice, models, "actual",
                                                     formula=leakage_vdd_terminals)
     pred["rel_err"] = (pred["ml_leak"] - pred["spice_leak"]) / pred["spice_leak"]
     pred.to_csv(OUT_DIR / "gate_predictions.csv", index=False)
 
     table = results_table(pred, "ml_leak", "spice_leak")
     table.to_csv(OUT_DIR / "gate_table.csv", index=False)
-    variants = {"main (Vg at rail)": ("ml_leak", "spice_leak"),
-                "recorded Vg": ("ml_leak_actual_vg", "spice_leak"),
+    variants = {"main (recorded Vg)": ("ml_leak", "spice_leak"),
+                "Vg snapped to rail": ("ml_leak_rail_vg", "spice_leak"),
                 "supply + inputs at VDD": ("ml_leak_with_inputs", "spice_leak_with_inputs"),
                 "previous formula (VDD terminals)": ("ml_leak_vdd_terminals", "spice_leak")}
     var_table = table[["gate", "inputs"]].copy()
