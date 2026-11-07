@@ -26,7 +26,8 @@ SWEEP_W = 44e-9                 # same width as the example netlists
 KCL_LIMIT = 1e-3
 KCL_ABS = 1e-13                 # A
 
-SETS = {"uniform": ("", config.N_SAMPLES), "targeted": ("_targeted", config.N_TARGETED)}
+# data/<case>.csv: N_SAMPLES uniform rows followed by N_TARGETED targeted rows
+SETS = {"uniform": config.N_SAMPLES, "targeted": config.N_TARGETED}
 
 # Gate operating points (fractions of VDD) used for the coverage table
 ON_VDS_MAX = 4e-3               # V, |Vds| of an ON device that carries only leakage
@@ -54,9 +55,15 @@ def log(msg=""):
 
 
 def load_datasets():
-    """{set: {case: DataFrame}} for the uniform (spec) and targeted datasets."""
-    return {s: {case: pd.read_csv(config.DATA_DIR / f"{case}{suffix}.csv") for case in config.CASES}
-            for s, (suffix, _) in SETS.items()}
+    """{set: {case: DataFrame}}: the uniform and targeted parts of each data/<case>.csv."""
+    sets = {s: {} for s in SETS}
+    for case in config.CASES:
+        df = pd.read_csv(config.DATA_DIR / f"{case}.csv")
+        if len(df) != sum(SETS.values()):
+            raise SystemExit(f"{case}.csv: expected {sum(SETS.values())} rows, found {len(df)}")
+        sets["uniform"][case] = df.iloc[:config.N_SAMPLES].reset_index(drop=True)
+        sets["targeted"][case] = df.iloc[config.N_SAMPLES:].reset_index(drop=True)
+    return sets
 
 
 def kcl_residual(df):
@@ -89,7 +96,7 @@ def sanity_checks(sets):
     log("\nSanity checks")
     ok_all = True
     for s, data in sets.items():
-        ok_all &= _sanity_checks(data, SETS[s][1], s)
+        ok_all &= _sanity_checks(data, SETS[s], s)
     return ok_all
 
 

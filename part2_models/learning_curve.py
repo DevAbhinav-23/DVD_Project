@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from train_compare import (CASES, DATASETS, GRIDS, OUT_DIR, SEED, TARGETS, metrics,  # noqa: E402
+from train_compare import (CASES, GRIDS, OUT_DIR, SEED, TARGETS, load_datasets, metrics,  # noqa: E402
                            split_idx, train_family)
 from leakage_model import make_features, to_log  # noqa: E402
 import config  # noqa: E402  (path added by train_compare)
@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import matplotlib.ticker  # noqa: E402
 
 warnings.filterwarnings("ignore")
-SIZES = [1000, 2000, 5000]  # plus the full training split (10,500 rows per case)
+SIZES = [1000, 2000, 5000]  # plus the full training split (7,000 rows per case)
 COLORS = dict(zip(CASES, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]))
 LINESTYLES = {"uniform": "-", "targeted": "--"}
 
@@ -35,8 +35,7 @@ LINESTYLES = {"uniform": "-", "targeted": "--"}
 def load_case(case):
     """All rows of one case plus train / val / per-dataset test indices, as in train_compare.py."""
     parts, tr, va, tests, offset = [], [], [], {}, 0
-    for set_name, pattern in DATASETS.items():
-        d = pd.read_csv(config.DATA_DIR / pattern.format(case=case))
+    for set_name, d in load_datasets(case).items():
         s_tr, s_va, s_te = split_idx(len(d))
         tr.append(s_tr + offset)
         va.append(s_va + offset)

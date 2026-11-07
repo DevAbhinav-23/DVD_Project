@@ -1,10 +1,9 @@
-"""Part 1: generate the single-transistor datasets.
+"""Part 1: generate the single-transistor datasets, one file per case: data/<case>.csv.
 
-  data/<case>.csv           spec dataset: Vd, Vs uniform in [0, VDD]
-  data/<case>_targeted.csv  targeted dataset: Vd, Vs where transistors sit inside static gates
+Rows 0 .. N_SAMPLES-1 are uniform samples (Vd, Vs uniform in [0, VDD], as in the spec);
+the next N_TARGETED rows are targeted samples (Vd, Vs where transistors sit inside static gates).
 
-Usage:  python part1_dataset/generate.py [--set uniform|targeted|both] [--cases nmos_on ...]
-                                         [--n 10000] [--n-targeted 5000]
+Usage:  python part1_dataset/generate.py [--cases nmos_on ...]
 """
 import argparse
 import sys
@@ -129,29 +128,27 @@ def generate_case(case, n, targeted=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--set", choices=["uniform", "targeted", "both"], default="both")
     parser.add_argument("--cases", nargs="+", default=list(config.CASES), choices=list(config.CASES))
-    parser.add_argument("--n", type=int, default=config.N_SAMPLES, help="uniform samples per case")
-    parser.add_argument("--n-targeted", type=int, default=config.N_TARGETED,
-                        help="targeted samples per case")
     args = parser.parse_args()
 
-    sets = {"uniform": [False], "targeted": [True], "both": [False, True]}[args.set]
     config.DATA_DIR.mkdir(exist_ok=True)
-    for targeted in sets:
-        for case in args.cases:
-            t0 = time.time()
-            n = args.n_targeted if targeted else args.n
-            df, redrawn = generate_case(case, n, targeted)
-            out = config.DATA_DIR / f"{case}{'_targeted' if targeted else ''}.csv"
-            df.to_csv(out, index=False)
+    for case in args.cases:
+        t0 = time.time()
+        parts, redrawn = [], 0
+        for n, targeted in [(config.N_SAMPLES, False), (config.N_TARGETED, True)]:
+            df, r = generate_case(case, n, targeted)
+            parts.append(df)
+            redrawn += r
+        df = pd.concat(parts, ignore_index=True)
+        out = config.DATA_DIR / f"{case}.csv"
+        df.to_csv(out, index=False)
 
-            print(f"\n{out.stem}: {len(df)} rows -> {out.relative_to(config.ROOT)}  "
-                  f"(redrawn {redrawn}, {time.time() - t0:.1f} s)")
-            for c in CURRENTS:
-                mag = df[c].abs()
-                print(f"  {c}: |I| from {mag.min():.3e} to {mag.max():.3e} A, "
-                      f"median {mag.median():.3e} A, negative in {(df[c] < 0).mean():.0%} of rows")
+        print(f"\n{case}: {len(df)} rows ({config.N_SAMPLES} uniform + {config.N_TARGETED} targeted) "
+              f"-> {out.relative_to(config.ROOT)}  (redrawn {redrawn}, {time.time() - t0:.1f} s)")
+        for c in CURRENTS:
+            mag = df[c].abs()
+            print(f"  {c}: |I| from {mag.min():.3e} to {mag.max():.3e} A, "
+                  f"median {mag.median():.3e} A, negative in {(df[c] < 0).mean():.0%} of rows")
 
 
 if __name__ == "__main__":

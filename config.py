@@ -40,8 +40,11 @@ CASES = {
 }
 
 # ---------------------------------------------------------------- dataset
-N_SAMPLES = 10_000
-# Targeted samples per case (data/<case>_targeted.csv): terminal voltages placed where
+# 5,000 uniform + 5,000 targeted = 10,000 rows per case. The uniform test accuracy had already
+# levelled off at ~3,300 uniform training rows (Part 2 learning curve), while the targeted accuracy,
+# which drives gate accuracy, was still improving, so the cut is taken from the uniform set.
+N_SAMPLES = 5_000
+# Targeted samples per case (the last N_TARGETED rows of data/<case>.csv): terminal voltages placed where
 # transistors sit inside static gates (ON: |Vds| ~ 0; OFF: terminals at or near the rails),
 # which uniform Vd, Vs sampling almost never reaches. Kept separate from the spec datasets.
 N_TARGETED = 5_000

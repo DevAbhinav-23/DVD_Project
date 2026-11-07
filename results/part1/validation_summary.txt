@@ -1,9 +1,9 @@
 KCL check: pass if |Id+Ig+Is+Ib| <= 0.001 * max|I| + 1e-13 A
      set     case  rows  median_rel  p95_rel  max_rel  max_abs_A  pass
- uniform  nmos_on 10000    1.73e-12 3.11e-09 2.68e-04   1.57e-15  True
- uniform nmos_off 10000    6.89e-16 2.89e-15 5.48e-15   6.50e-22  True
- uniform  pmos_on 10000    4.16e-13 6.26e-11 3.03e-07   3.53e-17  True
- uniform pmos_off 10000    5.63e-08 1.99e-06 1.83e-04   6.63e-15  True
+ uniform  nmos_on  5000    1.98e-12 3.17e-09 3.82e-05   9.30e-16  True
+ uniform nmos_off  5000    7.11e-16 2.92e-15 8.48e-15   4.99e-22  True
+ uniform  pmos_on  5000    4.13e-13 6.40e-11 2.30e-07   3.24e-17  True
+ uniform pmos_off  5000    5.83e-08 1.81e-06 2.28e-04   6.82e-15  True
 targeted  nmos_on  5000    5.28e-09 1.42e-05 1.07e-03   1.57e-15  True
 targeted nmos_off  5000    7.01e-16 2.68e-15 5.12e-15   1.82e-21  True
 targeted  pmos_on  5000    3.11e-10 2.00e-07 3.51e-05   3.38e-17  True
@@ -21,14 +21,14 @@ Sanity checks
 
 Coverage of gate operating points (rail = within 1% of 0 or VDD)
     case                operating point  uniform rows  targeted rows
- nmos_on                   |Vds| < 4 mV            84           4040
+ nmos_on                   |Vds| < 4 mV            39           4040
  nmos_on |Vds| < 4 mV, terminal on rail             0           2019
-nmos_off    terminals on opposite rails             5           1471
-nmos_off         one terminal on a rail           400           4715
- pmos_on                   |Vds| < 4 mV            80           3987
- pmos_on |Vds| < 4 mV, terminal on rail             3           2025
-pmos_off    terminals on opposite rails             4           1458
-pmos_off         one terminal on a rail           401           4724
+nmos_off    terminals on opposite rails             1           1471
+nmos_off         one terminal on a rail           177           4715
+ pmos_on                   |Vds| < 4 mV            49           3987
+ pmos_on |Vds| < 4 mV, terminal on rail             1           2025
+pmos_off    terminals on opposite rails             0           1458
+pmos_off         one terminal on a rail           189           4724
 
 Trend checks (controlled sweeps, uniform dataset scatter)
   |Ioff| vs temp, nmos_off     increasing     PASS

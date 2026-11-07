@@ -9,7 +9,7 @@ leakage of a complete circuit (8 data bits plus 1 parity bit: 9 inputs).
 ## Status
 | Part | What | State | Headline result |
 |---|---|---|---|
-| 1 | Transistor datasets (SPICE) | **Done** | 4 × 10,000 uniform + 4 × 5,000 targeted rows, all checks pass |
+| 1 | Transistor datasets (SPICE) | **Done** | 10,000 rows per case: 5,000 uniform + 5,000 targeted, all checks pass |
 | 2 | ML models per transistor case | **Done** | MLP chosen for all 4 cases, 1.3–1.9% median test error |
 | 3 | Gate-level validation | **Done** | 3,600 gate runs: **1.4% median, 4.7% p95 error** vs SPICE |
 | 4 | Circuit-level validation (parity checker) | **Done** | 102,400 runs; corrected error: **1.37% median, 3.50% p95, 1.55% mean** |
@@ -44,7 +44,9 @@ For Part 4 implementation details, read [Conventions](#conventions), the Part 3 
 
 ## Handoff in short
 **Done (Parts 1–3):**
-- SPICE datasets for the 4 transistor cases (10k uniform + 5k targeted rows each), validated.
+- SPICE datasets for the 4 transistor cases (5k uniform + 5k targeted = 10k rows each), validated.
+  **The uniform set was trimmed from 10k to 5k rows; Part 2 must be retrained on the new data, and the
+  Part 2–4 results below come from the earlier 10k + 5k models until then.**
 - 4 model types compared per case; the MLP chosen and saved (`results/part2/models/*.joblib`).
 - Learning curve over 1k / 2k / 5k / 10.5k training rows.
 - 5 gates × all input cases × 200 shared corners simulated in SPICE, oracle check passed, ML gate
@@ -95,7 +97,7 @@ Every part follows these. Part 4 must too, or its numbers are not comparable wit
 | 1 | Does the parity checker have 8 inputs or 9 inputs? | **Decided by the Part 4 owner:** 8 data bits + 1 parity bit, 512 vectors |
 | 2 | Should the ML side solve the internal node voltages itself, or use the SPICE-recorded ones? | **Decided:** gate models use Part 3 SPICE-recorded voltages; circuit ML uses only the gate lookup and Boolean logic, with no circuit-SPICE voltages |
 | 3 | Does gate-tunnelling current drawn through the input sources count as leakage? | **Open.** Main result excludes it; the variant including it is reported |
-| 4 | Is the extra targeted dataset (5k rows per case, non-uniform Vd/Vs) acceptable next to the required 10k uniform? | **Being asked.** The spec allows more samples |
+| 4 | Is a 5k uniform + 5k targeted (non-uniform Vd/Vs) mix acceptable for the 10k rows per case? | **Being asked.** The spec allows changing the sample count |
 
 ## Repository layout
 ```
@@ -106,7 +108,7 @@ docs/                   # project specification (DVD_ML_PROJECT.pdf)
 part1_dataset/
   netlists/             # example single-transistor netlists (nmos_on/off, pmos_on/off .cir)
   spice_utils.py        # model card with corner parameters, run ngspice, read back Id, Ig, Is, Ib
-  generate.py           # draw samples and simulate -> data/<case>.csv, data/<case>_targeted.csv
+  generate.py           # draw samples and simulate -> data/<case>.csv (10k rows: 5k uniform + 5k targeted)
   validate.py           # KCL, sanity, coverage checks and trend plots -> results/part1/
 part2_models/
   leakage_model.py      # features, log10|I| + sign target, saved CaseModel (load_case_model)
@@ -179,10 +181,16 @@ and results are committed, so Part 4 does **not** need to rerun Parts 1–3.
 - **Targeted set (extra):** 5,000 more rows per case at the voltages transistors actually see inside
   static gates (below).
 
-| Files | Rows per case | Terminal voltages |
+One file per case, `data/<case>.csv`, 10,000 rows:
+
+| Rows | Count | Terminal voltages |
 |---|---|---|
-| `data/<case>.csv` (spec deliverable) | 10,000 | Vd, Vs uniform in [0, VDD], as the spec requires |
-| `data/<case>_targeted.csv` | 5,000 | Where transistors sit inside static gates |
+| 0 – 4,999 (uniform) | 5,000 (`N_SAMPLES`) | Vd, Vs uniform in [0, VDD], as the spec requires |
+| 5,000 – 9,999 (targeted) | 5,000 (`N_TARGETED`) | Where transistors sit inside static gates |
+
+The row order is how the two parts are told apart (no extra column, so the file keeps exactly the
+spec's columns). Read it with `part2_models/train_compare.py:load_datasets(case)`, which returns both
+parts and checks the row count against `config.py`.
 
 Columns: `vdd, temp, w, vd, vs, vg, vb, vth0, toxe, ndep, u0, xj` (inputs) and `id, ig, is, ib`
 (targets). Units are SI (V, m, A, m⁻³ for ndep, m²/Vs for u0); `temp` in °C. `<case>` is `nmos_on`,
@@ -190,7 +198,7 @@ Columns: `vdd, temp, w, vd, vs, vg, vb, vth0, toxe, ndep, u0, xj` (inputs) and `
 
 **Why the targeted set exists.** Inside a gate, an ON transistor carries only leakage, so its
 |Vds| is a few mV or less, often with one terminal on its rail; OFF transistors have their terminals
-at or near 0 and VDD. Uniform Vd, Vs almost never lands there (e.g. 3 of 10,000 PMOS ON rows have
+at or near 0 and VDD. Uniform Vd, Vs almost never lands there (e.g. 1 of 5,000 uniform PMOS ON rows has
 |Vds| < 4 mV with a terminal on VDD), so models trained only on the uniform set are untested exactly
 where Parts 3 and 4 use them. The targeted set fills those regions:
 - **ON:** one terminal (drain or source, at random) on the device's own rail (VDD for PMOS, 0 for
@@ -201,7 +209,7 @@ where Parts 3 and 4 use them. The targeted set fills those regions:
 - **W:** half at `config.GATE_W` (the gate width), half uniform.
 
 The ranges come from circuit behaviour, not from the Part 3 SPICE results (those are evaluation-only).
-`generate.py --set uniform|targeted|both`, `--cases nmos_on ...`, `--n` and `--n-targeted` regenerate a subset.
+`generate.py --cases nmos_on ...` regenerates a subset; the sizes come from `N_SAMPLES` and `N_TARGETED` in `config.py`.
 
 ### Results
 All checks pass ([results/part1/validation_summary.txt](results/part1/validation_summary.txt)).
@@ -210,7 +218,7 @@ All checks pass ([results/part1/validation_summary.txt](results/part1/validation
   floor in the BSIM4 model's current bookkeeping: it appears only where every current is in the pA range,
   and it is unchanged when the solver tolerances are tightened 1000×.
 - **Coverage** (`results/part1/coverage.csv`, `coverage.png`): e.g. PMOS ON rows with |Vds| < 4 mV and a
-  terminal on VDD: 3 (uniform) vs 2,025 (targeted); NMOS OFF rows with terminals on opposite rails: 5 vs 1,471.
+  terminal on VDD: 1 (uniform) vs 2,025 (targeted); NMOS OFF rows with terminals on opposite rails: 1 vs 1,471.
 - **Trends** (`off_current_vs_temp.png`, `off_current_vs_vth0.png`, `gate_current_vs_toxe.png`, each from
   the random data and a controlled sweep at nominal): OFF current rises with temperature and falls as
   |vth0| grows; |Ig| falls as toxe grows.
@@ -228,7 +236,7 @@ All checks pass ([results/part1/validation_summary.txt](results/part1/validation
 **Goal:** predict a transistor's four terminal currents without running SPICE.
 
 ### Method
-- **Data:** `data/<case>.csv` (uniform) and `data/<case>_targeted.csv` are each split 70 / 15 / 15 with
+- **Data:** the uniform and targeted parts of `data/<case>.csv` (`load_datasets`) are each split 70 / 15 / 15 with
   `SEEDS["split"]` and combined for training and validation. The two test slices are reported separately.
   Row indices are saved in `results/part2/splits/<case>_<set>_<split>_idx.csv`.
 - **Target:** each current is predicted as `sign(I) × 10^y` with `y = log10|I|`, clipped at 1e-15 A.
@@ -282,7 +290,11 @@ median / p95 on the uniform test · median / p95 on the targeted test.
 
 - **Uniform test:** the median levels off at 1.3–1.9% from 2k rows on, the p95 from 5k rows on (6–9%).
 - **Targeted test:** the p95 keeps falling up to the full set (OFF 17–20% to 12%, ON 77–82% to 54–60%),
-  so the full 15k samples are worth it for the gate operating points.
+  so the targeted rows are worth keeping in full for the gate operating points.
+- **Dataset trimmed to 10k per case (5k uniform + 5k targeted).** The uniform accuracy had levelled off by
+  5k total rows (~3.3k uniform), so the cut was taken from the uniform set and the targeted set kept whole.
+  This curve kept the mix fixed, so it does not separate the two effects: the retrain on the trimmed data
+  must confirm that the uniform and targeted test errors (and the Part 3 gate error) hold.
 - **ON uniform median** rises from 1.4–1.5% at 5k to 1.8–1.9% at 10.5k while the ON targeted p95 falls.
   Every subset has the same uniform / targeted mix, so this is the fit trading a little uniform accuracy
   for the hard targeted points (plus run-to-run training variance), not a lack of data.

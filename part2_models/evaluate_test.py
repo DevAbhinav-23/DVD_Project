@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from train_compare import CASES, DATASETS, OUT_DIR, TARGETS  # noqa: E402
+from train_compare import CASES, OUT_DIR, TARGETS, load_datasets  # noqa: E402
 from leakage_model import I_FLOOR, INPUTS, load_case_model  # noqa: E402
 import config  # noqa: E402  (path added by train_compare)
 
@@ -29,8 +29,7 @@ def main():
     frames = []
     for case in CASES:
         model = load_case_model(OUT_DIR / "models" / f"{case}.joblib")
-        for set_name, pattern in DATASETS.items():
-            df = pd.read_csv(config.DATA_DIR / pattern.format(case=case))
+        for set_name, df in load_datasets(case).items():
             te = pd.read_csv(OUT_DIR / "splits" / f"{case}_{set_name}_test_idx.csv").row.values
             test = df.iloc[te]
             pred = model.predict(test)

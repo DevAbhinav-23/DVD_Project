@@ -43,9 +43,20 @@ from leakage_model import I_FLOOR, INPUTS, TARGETS, CaseModel, Column, SignModel
 CASES = list(config.CASES)
 SEED = config.SEEDS["split"]
 SPLIT = (0.70, 0.15, 0.15)  # train / val / test, applied to each dataset separately
-# data/<case>.csv (uniform Vd, Vs) and data/<case>_targeted.csv (gate operating points) are
-# split separately with the same seed and combined, so each test slice can be reported on its own.
-DATASETS = {"uniform": "{case}.csv", "targeted": "{case}_targeted.csv"}
+# data/<case>.csv holds config.N_SAMPLES uniform rows (Vd, Vs uniform) followed by config.N_TARGETED
+# targeted rows (gate operating points). The two parts are split separately with the same seed and
+# combined, so each test slice can be reported on its own.
+DATASETS = ("uniform", "targeted")
+
+
+def load_datasets(case, data_dir=config.DATA_DIR):
+    """{"uniform": DataFrame, "targeted": DataFrame}: the two parts of data/<case>.csv."""
+    df = pd.read_csv(Path(data_dir) / f"{case}.csv")
+    if len(df) != config.N_SAMPLES + config.N_TARGETED:
+        raise SystemExit(f"{case}.csv: expected {config.N_SAMPLES} + {config.N_TARGETED} rows, "
+                         f"found {len(df)}")
+    return {"uniform": df.iloc[:config.N_SAMPLES].reset_index(drop=True),
+            "targeted": df.iloc[config.N_SAMPLES:].reset_index(drop=True)}
 OUT_DIR = config.RESULTS_DIR / "part2"
 
 matplotlib.use("Agg")
@@ -245,16 +256,11 @@ def main():
     for case in a.cases:
         parts, idx = [], {"train": [], "val": [], "test_uniform": [], "test_targeted": []}
         offset = 0
-        for set_name, pattern in DATASETS.items():
-            path = Path(a.data_dir) / pattern.format(case=case)
-            if not path.exists():
-                print(f"  ({path.name} not found, skipped)")
-                continue
-            d = pd.read_csv(path)
+        for set_name, d in load_datasets(case, a.data_dir).items():
             d.columns = [c.strip().lower() for c in d.columns]
             missing = set(INPUTS + TARGETS) - set(d.columns)
             if missing:
-                raise SystemExit(f"{path.name}: missing columns {sorted(missing)}")
+                raise SystemExit(f"{case}.csv ({set_name}): missing columns {sorted(missing)}")
             d = d.dropna(subset=INPUTS + TARGETS).reset_index(drop=True)
             s_tr, s_va, s_te = split_idx(len(d))
             for name, ix in zip(("train", "val", "test"), (s_tr, s_va, s_te)):
