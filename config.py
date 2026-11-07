@@ -68,3 +68,9 @@ CORNERS_FILE = DATA_DIR / "corners.csv"
 # ---------------------------------------------------------------- gates (Parts 3 and 4)
 # The spec gives no gate sizing, so every NMOS and PMOS in a gate is minimum size (W = Lmin).
 GATE_W = {"nmos": W_MIN, "pmos": W_MIN}
+
+# Eight data bits followed by one even-parity bit. XOR=1 flags a parity error.
+PARITY_DATA_BITS = 8
+PARITY_INPUTS = PARITY_DATA_BITS + 1
+CIRCUIT_WORKERS = 6
+CIRCUIT_INPUT_TOL_V = 1e-9  # same voltage tolerance as SPICE_OPTIONS vntol

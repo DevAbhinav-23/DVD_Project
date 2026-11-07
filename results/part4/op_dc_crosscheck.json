@@ -1,0 +1,24 @@
+{
+  "status": "PASS",
+  "cases": 1200,
+  "corners": [
+    0,
+    1,
+    46,
+    58,
+    65,
+    68,
+    72,
+    102,
+    112,
+    169
+  ],
+  "max_supply_relative_difference": 1.64334414911572e-07,
+  "max_node_voltage_absolute_difference_V": 6.413579147768189e-07,
+  "max_input_current_absolute_difference_A": 1.4832579608992091e-13,
+  "limits": {
+    "supply_relative": 1e-05,
+    "node_voltage_absolute_V": 1e-06,
+    "input_current_absolute_A": 1e-12
+  }
+}

@@ -4,7 +4,7 @@ This is the repo which contains the main codebase for the Digital VLSID Course 2
 
 The idea: simulate single transistors in SPICE, learn their terminal currents with ML, use those
 models to estimate the leakage of logic gates, and finally add up gate estimates to predict the
-leakage of a complete circuit (an 8-bit parity checker).
+leakage of a complete circuit (8 data bits plus 1 parity bit: 9 inputs).
 
 ## Status
 | Part | What | State | Headline result |
@@ -12,11 +12,11 @@ leakage of a complete circuit (an 8-bit parity checker).
 | 1 | Transistor datasets (SPICE) | **Done** | 4 × 10,000 uniform + 4 × 5,000 targeted rows, all checks pass |
 | 2 | ML models per transistor case | **Done** | MLP chosen for all 4 cases, 1.3–1.9% median test error |
 | 3 | Gate-level validation | **Done** | 3,600 gate runs: **1.4% median, 4.7% p95 error** vs SPICE |
-| 4 | Circuit-level validation (parity checker) | **To do** | See [Part 4 — what is left](#part-4--circuit-level-validation-to-do) |
-| 5 | `run_all`, report, final packaging | **To do** | See [Part 5](#part-5--final-deliverables-to-do) |
+| 4 | Circuit-level validation (parity checker) | **Done** | 102,400 runs; corrected error: **1.37% median, 3.50% p95, 1.55% mean** |
+| 5 | `run_all`, report, final packaging | **In progress** | `run_all.py` and Part 4 report done; final combined team report/packaging remain |
 
-If you are picking up Part 4, read [Conventions](#conventions), skim the Part 3 results, then go
-straight to [Part 4](#part-4--circuit-level-validation-to-do).
+For Part 4 implementation details, read [Conventions](#conventions), the Part 3 results, and
+[Part 4](#part-4--circuit-level-validation).
 
 ## Results at a glance
 **Mean error** (mean of |ML − SPICE| / |SPICE|):
@@ -27,6 +27,8 @@ straight to [Part 4](#part-4--circuit-level-validation-to-do).
 | Transistor models, targeted test (gate operating points) | 7.2% | 1.9–4.8% per case | 12–54% per case |
 | **Gates, all 3,600 runs (18 cases × 200 corners)** | **1.8% (98.2% mean accuracy)** | **1.4%** | **4.7%** |
 | Gates per type: AND2 / OR2 / INV / NAND2 / NOR2 | 1.3% / 1.5% / 1.8% / 2.0% / 2.3% | 1.1% / 1.2% / 1.4% / 1.6% / 1.7% | 2.9% / 3.7% / 4.3% / 4.9% / 6.6% |
+| **Nine-input parity circuit, corrected supply estimate (102,400 runs)** | **1.55% (98.45% mean accuracy)** | **1.37%** | **3.50%** |
+| Circuit, plain gate sum (spec baseline) | 24.75% | 21.67% | 53.58% |
 
 **Highest error:**
 - **Gate level: NOR2.** NOR2 `10` (A = 1, B = 0) has the highest median and mean error (2.7%, 3.1%);
@@ -48,10 +50,10 @@ straight to [Part 4](#part-4--circuit-level-validation-to-do).
 - 5 gates × all input cases × 200 shared corners simulated in SPICE, oracle check passed, ML gate
   leakage computed and compared (1.4% median, 1.8% mean error).
 
-**For the Part 4 owner:** build the 8-bit parity checker from 28 NAND2s, simulate it in SPICE for every
-input vector at the 200 corners, sum the 28 NAND2 ML leakages from `results/part3/gate_predictions.csv`
-(plus the input-current correction), compare against SPICE, and write `run_all`. Details and pitfalls
-in [Part 4](#part-4--circuit-level-validation-to-do).
+**Part 4 implementation:** `part4_circuit/` builds a nine-input parity checker from 32 NAND2s,
+checks all 512 logic vectors, simulates the complete circuit at the existing 200 corners, and
+compares plain and input-current-corrected ML gate sums. `run_all.py` integrates all stages.
+See [Part 4](#part-4--circuit-level-validation) for commands and outputs.
 
 ## Our assignment
 | Item | Value |
@@ -60,7 +62,7 @@ in [Part 4](#part-4--circuit-level-validation-to-do).
 | Nominal VDD | 0.9 V (sampled range 0.81 – 0.99 V) |
 | Channel length L | 22 nm |
 | Widths (NMOS and PMOS) | 22 nm – 176 nm (1 × Lmin to 8 × Lmin) |
-| Test circuit | 8-bit parity checker |
+| Test circuit | 8 data bits + 1 even-parity bit (9 inputs) |
 | Target | Up to 99% mean accuracy (mean relative error of about 1%) |
 
 All of these values live in **one shared config file** ([config.py](config.py)), along with the model
@@ -90,8 +92,8 @@ Every part follows these. Part 4 must too, or its numbers are not comparable wit
 ## Decisions and open questions
 | # | Question | Status |
 |---|---|---|
-| 1 | Does the parity checker have 8 inputs (256 vectors) or 9 inputs (8 data bits + parity bit, 512 vectors)? | **Open**, ask the TA |
-| 2 | Should the ML side solve the internal node voltages itself, or use the SPICE-recorded ones? | **Decided:** the ML models predict currents / leakage only; node voltages come from the SPICE record |
+| 1 | Does the parity checker have 8 inputs or 9 inputs? | **Decided by the Part 4 owner:** 8 data bits + 1 parity bit, 512 vectors |
+| 2 | Should the ML side solve the internal node voltages itself, or use the SPICE-recorded ones? | **Decided:** gate models use Part 3 SPICE-recorded voltages; circuit ML uses only the gate lookup and Boolean logic, with no circuit-SPICE voltages |
 | 3 | Does gate-tunnelling current drawn through the input sources count as leakage? | **Open.** Main result excludes it; the variant including it is reported |
 | 4 | Is the extra targeted dataset (5k rows per case, non-uniform Vd/Vs) acceptable next to the required 10k uniform? | **Being asked.** The spec allows more samples |
 
@@ -117,15 +119,24 @@ part3_gates/
   gates.py              # gate topologies, gate netlists, batched ngspice runs, leakage formula
   simulate.py           # 18 cases x 200 corners in SPICE + oracle check -> results/part3/
   compare.py            # ML gate leakage vs SPICE -> results table, parity plot
+part4_circuit/
+  circuit.py            # shared ordered NAND graph, logic evaluation, transistor netlists
+  verify.py             # exhaustive 512-vector logic and topology checks
+  test_circuit.py       # current ownership, missing-data and wrong-logic checks
+  simulate.py           # 512 vectors x 200 corners, resumable per-corner SPICE batches
+  compare.py            # plain/corrected hierarchical sums, diagnostics, tables and plots
+run_all.py              # regenerate all stages, or --part4-only using saved upstream artifacts
 data/                   # generated datasets (Part 1 CSVs) and the corner table
 results/part1/          # Part 1 plots, KCL and coverage summaries, validation summary
 results/part2/          # Part 2 tables, plots, splits and the four saved models
 results/part3/          # Part 3 SPICE records, predictions, gate table, oracle check, parity plot
+results/part4/          # circuit netlist, compressed records/predictions, metrics, plots and metadata
 ```
 Each later part gets its own `partN_*/` folder and writes its outputs under `results/partN/`.
 
 ## Setup
 Requires ngspice (developed with ngspice-42) and Python 3.12.
+On Ubuntu/WSL2: `sudo apt-get install ngspice python3-venv python3-pip`.
 ```
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
@@ -140,6 +151,7 @@ python3 -m venv .venv
 .venv/bin/python part2_models/learning_curve.py   # ~80 min, needs train_compare.py first
 .venv/bin/python part3_gates/simulate.py          # ~1 min on 16 cores, 3,600 SPICE runs + oracle check
 .venv/bin/python part3_gates/compare.py           # ~5 s, ML gate leakage, gate table, parity plot
+.venv/bin/python run_all.py --part4-only         # verify, circuit SPICE, hierarchical comparison
 ```
 All scripts use the fixed seeds in `config.py`, so a rerun reproduces the same data. The saved models
 and results are committed, so Part 4 does **not** need to rerun Parts 1–3.
@@ -358,73 +370,140 @@ spice_leak, ml_leak` plus the variant columns (`ml_leak_rail_vg`, `spice_leak_wi
 
 ---
 
-## Part 4 — Circuit-level validation (to do)
-**Goal:** estimate the 8-bit parity checker's leakage by summing gate-level ML estimates, and compare
-with full-circuit SPICE.
+## Part 4 — Circuit-level validation
 
-### What you already have
-- **ML NAND2 leakage for every (inputs, corner):** `results/part3/gate_predictions.csv`, rows with
-  `gate == "nand2"`, column `ml_leak` (800 rows = 4 input patterns × 200 corners). This is exactly the
-  spec's gate model: (gate type, inputs, corner) → leakage, with internal node voltages from the Part 3
-  record. The NAND2 accuracy there is 1.3–2.0% median, 4.1–5.7% p95; that is the baseline to compare
-  the circuit against.
-- **The 200 corners:** `from corners import load_corners` (with `part3_gates/` on `sys.path`). Use the
-  same file; do not redraw.
-- **Netlist building blocks:** `spice_utils.model_card(mos_type, corner_params(corner, mos_type))` gives the
-  NMOS / PMOS model cards for a corner, `config.SPICE_OPTIONS` the options line, `config.GATE_W` and
-  `config.L` the sizes. `gates.build_netlist` and `gates.run_batch` / `run_jobs` show a working pattern for
-  writing netlists and running many of them in parallel ngspice processes.
-- **The NAND2 topology** above (`GATES["nand2"]`). The parity netlist must use the same transistors.
+**Complete:** all 512 vectors at all 200 corners passed input-voltage and gate-logic checks.
+The corrected leakage estimate has 1.37% median, 3.50% p95, 1.55% mean and 6.46% maximum error.
+The plain gate sum has 24.75% mean error. Corrected mean accuracy is 98.45%, so the approximate
+99% objective has not been reached. Seven tests and 1,200 independent `.op`/DC comparisons passed,
+including selected patterns at eight PVT extremes. `run_all.py --part4-only` was verified end to end.
 
-### Steps
-1. **Circuit:** XOR tree of 7 XOR2s, each XOR = 4 NAND2s (28 NAND2s, 112 transistors). Per XOR(A, B):
-   `n1 = NAND(A, B)`, `n2 = NAND(A, n1)`, `n3 = NAND(B, n1)`, `Y = NAND(n2, n3)`. Four XORs on the bit pairs,
-   then two, then one. The SPICE netlist must use **exactly the same** gate breakdown as the ML sum.
-2. **SPICE:** simulate the full netlist for every input vector at the 200 corners (256 × 200 = 51,200 runs,
-   or 512 × 200 if the TA says 9 inputs). Loop the vectors inside one netlist per corner (`.control` loop
-   with `alter` on the input sources) and run the corners in parallel. Record `-i(vsupply)` per
-   (vector, corner); inputs at exactly 0 or VDD; same `.options`. This is far heavier than Part 3.
-3. **Logic simulation:** for each vector, compute the logic values on every node, so each of the 28 NAND2s
-   gets its (a, b) input bits.
-4. **ML sum:** for each (vector, corner), sum `ml_leak` of the 28 NAND2s looked up by (input bits, corner).
-5. **Compare:** same metrics as the gate table (SPICE median, ML median, bias, median, p95, mean error)
-   over all (vector, corner), plus a log-log parity plot. Compare with the NAND2 gate-level accuracy.
-   Error analysis: worst vectors / corners (e.g. high temperature, low vth0).
+See the [Part 4 report](results/part4/report_part4.md), [metrics](results/part4/circuit_table.md),
+and [worked calculation](results/part4/example_calculation.md). The corrected SPICE-gate diagnostic
+still differs from the full circuit by 0.71% on average, showing the effect of the isolated-gate
+approximation even with SPICE gate currents. The worst corrected corner is 53 (111.13 C, VDD
+0.89907 V): 6.05% mean error across vectors and 6.46% in the worst case. High-temperature corners
+have higher errors on average, but some cold corners are also among the worst.
 
-### Things that will bite you
-- **Pin order matters.** NAND2 inputs `01` and `10` differ (median SPICE leakage 2.5e-8 vs 1.9e-8 A), since
-  `a` drives the NMOS next to the output and `b` the one next to ground. In the parity netlist, wire each
-  NAND's two inputs to pins `a` and `b` and look up the bits in that same order.
-- **Gate current of internally driven inputs.** In Part 3, the gate-tunnelling current into an input held
-  at VDD came from the input source and is **not** in `spice_leak` / `ml_leak`. In the circuit, an input
-  driven by another NAND's high output gets that current from VDD through the driver's ON PMOS, so circuit
-  SPICE leakage includes it. It is large: 30% (`01`) to 60% (`11`) of a NAND2's leakage. So the plain sum of
-  28 `ml_leak` values will **underestimate** the circuit. To correct it, add for every NAND input that is
-  high **and driven by another gate** (not a primary input) the ML current into that input: the sum of the
-  predicted `ig` of the two transistors gated by that pin (from the Part 2 models at that corner). Inputs
-  driven low need no correction (that current already flows from VDD through the load's own PMOS).
-  Primary inputs are driven by sources, so they stay excluded, as in Part 3. Report both the plain sum
-  and the corrected sum.
-  Checked on Part 3 SPICE data, where AND2 = NAND2 driving an INV: SPICE NAND2 + SPICE INV leakage misses
-  the AND2 leakage by 18–22% (median) whenever the NAND output is high; adding the INV's input current
-  (`i_in_a`) brings it to 0.2–0.6%.
-- **Non-ideal levels and loading.** Internal NAND outputs sit a few mV off the rail, and n1 drives two
-  gates; the gate-level lookup assumes inputs exactly at 0 or VDD. AND2 / OR2 in Part 3 show the effect is
-  small (≤ 1.1 points of median error), but expect the circuit to be somewhat less accurate than one gate.
+The submission uses the four saved transistor models and the Part 3 NAND2 lookup with Boolean
+inputs at the supply rails. It includes the specified plain gate sum and the supply-only estimate
+with the internal input-current correction. The
+[deliverables checklist](part4_circuit/DELIVERABLES.md) maps the artifacts to the brief.
 
-### Outputs
-Put the code in `part4_circuit/` and results in `results/part4/`: the parity netlist (one example
-corner), the SPICE record, ML predictions, circuit table and parity plot.
+In plain language, **PVT** means process (fabricated transistor properties), voltage
+(the supply), and temperature. A **corner** is one set of those conditions; here the
+200 corners are random samples, rather than just named manufacturing extremes.
+A **vector** is a nine-bit input pattern. One **simulation case** solves the complete
+transistor circuit for one vector at one corner. A **netlist** is the text description
+of the devices and their connections. The ML **calculation** estimates that same
+case by following the Boolean logic and combining saved gate-current predictions.
+We measure settled leakage, not the current consumed while inputs switch.
+
+For the error tables, **median** means half the errors are below that value; **p95**
+means 95% are below it; **mean** is their average. **Bias** retains the sign, so a
+negative bias means underprediction. A 2% relative error means the estimated leakage
+differs from SPICE by 2% of the SPICE value. **KCL** is conservation of current at a node.
+
+The implemented circuit has **8 data inputs plus 1 even-parity input**, ordered
+`d0 d1 d2 d3 d4 d5 d6 d7 parity`. Output `error` is the XOR of all nine inputs:
+0 means valid even parity; 1 indicates a parity error. All 512 patterns are evaluated,
+including valid and invalid parity. Seven XORs form a balanced tree over the data bits;
+one final XOR compares their parity with the supplied parity bit. Each XOR uses four
+ordered NAND2s: 32 NAND2 gates and 128 transistors in total.
+
+### Method and checks
+
+- `circuit.py:GRAPH` is the single source of truth for both Boolean logic and SPICE wiring.
+  NAND pin a drives the upper NMOS; pin b drives the lower NMOS, exactly as in Part 3.
+- W = L = 22 nm for every transistor; the assigned MGK model and `config.SPICE_OPTIONS`
+  are reused. All devices in a circuit share that corner's NMOS/PMOS parameter draws.
+- The complete transistor circuit is simulated at all **512 x 200 = 102,400** operating
+  points. Every primary input is 0 or VDD. No explicit output load is added.
+- The SPICE record includes supply current, nine input-source currents, all 32 NAND
+  output voltages, and corner parameters. Every internal gate's logic is checked, not
+  only the final output. Missing, non-finite, duplicate and incorrect cases fail the run.
+- Each corner is one ngspice process. An integer DC sweep is decoded into nine ideal input
+  voltage sources at 0/VDD; zero-volt input ammeters measure their currents. A quarter-code
+  offset avoids decoder discontinuities at the integer sweep points. Input levels are checked
+  within the specified 1 nV SPICE voltage tolerance. The 128 circuit transistors are unchanged.
+  An independent `--method op` uses separately altered input sources and operating-point calls
+  for cross-checking. Workers run concurrently; hashed per-corner checkpoints allow safe resume.
+- `compare.py` recreates the 800 NAND2 gate lookup entries using the saved models and
+  Part 3 voltages, and checks them against committed Part 3 predictions. No circuit-SPICE
+  measurement is used in the ML estimate.
+
+### Three ML estimates
+
+1. **Plain gate sum:** sum the 32 NAND2 supply leakages indexed by ordered input bits
+   and corner. This is the hierarchical sum requested in the specification.
+2. **Corrected supply estimate:** add the signed ML gate currents into every high NAND
+   input driven by another gate. These currents came from isolated input sources in
+   Part 3, but come through the driving gate from circuit VDD in Part 4. Exclude primary
+   input-source currents from this main result.
+3. **Supply plus high primary-input currents:** add those primary-input currents too,
+   and compare against a SPICE reference with exactly the same definition.
+
+The correction uses the sum of PMOS and NMOS `ig` on the relevant a/b pin, preserving
+its sign. It is independent of the circuit reference. Low inputs need no extra correction
+under the rail-input approximation. Both plain and corrected results must be reported.
+
+Two additional **evaluation-only** estimates use isolated-gate SPICE leakage/input
+currents in place of ML currents. Their residual against circuit SPICE measures the
+rail-input/loading approximation. They are diagnostics, not ML predictions or training data.
+
+### Run
+
+```bash
+python part4_circuit/test_circuit.py
+# Small trial (separate output, cannot overwrite full results):
+python part4_circuit/simulate.py --corners 0 1 --workers 2 --output results/part4/pilot
+python part4_circuit/compare.py --output results/part4/pilot
+# Independent solver-method cross-check (optional, separate reference):
+python part4_circuit/simulate.py --method op --corners 0 1 --workers 2 --output results/part4/pilot
+python part4_circuit/cross_check.py --include-extremes
+# Full circuit stage, using committed Parts 1-3:
+python run_all.py --part4-only --workers 6
+# Regenerate the entire project (includes hours of ML training/learning curves):
+python run_all.py
+```
+
+Use the Python executable from your virtual environment. This machine's Ubuntu environment
+is `/home/skd/.venvs/dvd-project/bin/python`; the documented `.venv` setup also works.
+Worker count is adjustable; six is the conservative default for this 12-thread machine.
+No GPU or synthesis tool is needed. The full sweep uses ngspice 42 and Python 3.12.
+
+### Outputs in `results/part4/`
+
+- `parity9_example.cir`: complete runnable transistor netlist at one corner/vector.
+- `parity9_dc.cir`: production 512-vector DC netlist (writes `measurements.txt` when run).
+- `spice_circuit.csv.gz`: full-circuit SPICE record (standard gzip-compressed CSV).
+- `nand2_lookup.csv`: the 800 ordered gate/corner entries and per-pin input currents.
+- `circuit_predictions.csv.gz`: all ML/diagnostic estimates and per-case errors.
+- `circuit_table.csv` / `.md`: SPICE/prediction medians, bias, median/p95/mean/max errors.
+- `errors_by_corner.csv`, `errors_by_vector.csv`, `worst_cases.csv`: error breakdowns.
+- `plots/circuit_parity.png`, `plots/error_vs_temperature.png`: comparisons and error analysis.
+- `simulation_summary.json`, `python_versions.json`: simulator, coverage, logic checks and versions.
+- `environment_freeze.txt`, `artifact_hashes.json`: complete package versions and input/code provenance.
+- `report_part4.md`, `error_decomposition.json`, `errors_by_pvt_quartile.csv`: report and error analysis.
+- `example_calculation.md`, `example_gate_breakdown.csv`: a worked example with all 32 gate contributions.
+- `op_dc_crosscheck.json`: agreement with an independently initialized `.op` pilot, when requested.
+
+Read compressed records directly with `pandas.read_csv(path, dtype={"vector": str})`.
+The string dtype preserves leading zeros in the nine-bit vector.
+
+Limitations: isolated-gate rail inputs ignore analog level shifts and loading. The correction
+accounts for current ownership but does not solve coupled analog gate voltages. Gate models
+retain their existing prediction errors; the 99% accuracy objective is evaluated, not assumed.
 
 ---
 
 ## Part 5 — Final deliverables (to do)
-1. A single `run_all` that regenerates everything, in order, from the model file using the fixed seeds.
-2. Record the simulator version actually used (`ngspice -v`); package versions are pinned in `requirements.txt`.
+1. **Done:** `run_all.py` regenerates all stages in order with fixed seeds; `--part4-only` reuses committed upstream artifacts. The Part 4 path was tested end to end; the hours-long upstream retraining pipeline was not rerun for this addition.
+2. **Done for Part 4:** simulator and Python/package versions are in `results/part4/`; direct package versions remain pinned in `requirements.txt`.
 3. Compile the model comparison table, the chosen-model test metrics, the gate table and the circuit table.
 4. Include all plots: KCL check, trend plots, predicted-vs-SPICE plots, learning curve, gate parity and
    circuit parity.
-5. Write the report:
+5. Write the combined team report (the Part 4 section is available in `results/part4/report_part4.md`):
    - **Setup:** model file, VDD, circuit, simulator and version.
    - **Data generation:** sampling (uniform and why the targeted set exists), netlists, split, data checks.
    - **Models:** the four model types, hyperparameters and preprocessing, comparison table, final choice.
@@ -441,7 +520,7 @@ corner), the SPICE record, ML predictions, circuit table and parity plot.
 | Member 1 | Part 1: transistor datasets | Done |
 | Member 2 | Part 2: ML training and model selection | Done |
 | Member 3 | Part 3: gate-level validation | Done |
-| Member 4 | Part 4: circuit-level validation and integration (`run_all`) | To do |
+| Member 4 | Part 4: circuit-level validation and integration (`run_all`) | Done locally; push deferred |
 
 Shared items with a single owner: the config file (Member 4), the corner table (Member 3), and the sign
 convention and leakage definition (agreed by everyone before coding).

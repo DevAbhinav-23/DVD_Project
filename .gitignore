@@ -1,3 +1,7 @@
 .venv/
 __pycache__/
 *.pyc
+results/part4/**/checkpoints/
+results/part4/checkpoints/
+results/part4/smoke/
+results/part4/pilot/
