@@ -72,7 +72,7 @@ CORNERS_FILE = DATA_DIR / "corners.csv"
 # The spec gives no gate sizing, so every NMOS and PMOS in a gate is minimum size (W = Lmin).
 GATE_W = {"nmos": W_MIN, "pmos": W_MIN}
 # Drain / source junction areas AD = AS = W x L_DIFF. The spec gives no diffusion length, so the
-# usual 2 x Lmin is taken. Not used in the Part 1 single-transistor netlists (training data).
+# usual 2 x Lmin is taken. Used in every netlist: single transistor (Part 1), gates and circuit.
 L_DIFF = 2 * L          # m
 
 # Eight data bits followed by one even-parity bit. XOR=1 flags a parity error.

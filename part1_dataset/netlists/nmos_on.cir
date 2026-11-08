@@ -5,8 +5,8 @@
 .options gmin=1e-18 abstol=1e-18 reltol=1e-6 vntol=1e-9
 .temp 27
 
-* Transistor: M<name> drain gate source body model W L
-M1 d g s b nmos W=44n L=22n
+* Transistor: M<name> drain gate source body model W L AD AS (AD = AS = W x 2 Lmin)
+M1 d g s b nmos W=44n L=22n AD=1.936e-15 AS=1.936e-15
 
 * One DC source per terminal (VDD = 0.9 V)
 Vd d 0 DC 0.9

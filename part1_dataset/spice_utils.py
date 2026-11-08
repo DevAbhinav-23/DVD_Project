@@ -48,7 +48,7 @@ def build_netlist(sample, mos_type):
 {config.SPICE_OPTIONS}
 .temp {sample['temp']!r}
 
-M1 d g s b {MODEL_NAME[mos_type]} W={sample['w']!r} L={config.L!r}
+M1 d g s b {MODEL_NAME[mos_type]} W={sample['w']!r} L={config.L!r} AD={sample['w'] * config.L_DIFF!r} AS={sample['w'] * config.L_DIFF!r}
 
 Vd d 0 DC {sample['vd']!r}
 Vg g 0 DC {sample['vg']!r}
