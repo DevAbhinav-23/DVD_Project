@@ -142,22 +142,22 @@ vin_a a 0 DC 0.8422082664615785
 vin_b b 0 DC 0.8422082664615785
 
 * M<name> d g s b, each terminal through a 0 V ammeter v<name>_<terminal>
-mp1 mp1_d mp1_g mp1_s mp1_b pch W=2.2e-08 L=2.2e-08
+mp1 mp1_d mp1_g mp1_s mp1_b pch W=2.2e-08 L=2.2e-08 AD=9.68e-16 AS=9.68e-16
 vmp1_d out mp1_d DC 0
 vmp1_g a mp1_g DC 0
 vmp1_s vdd mp1_s DC 0
 vmp1_b vdd mp1_b DC 0
-mp2 mp2_d mp2_g mp2_s mp2_b pch W=2.2e-08 L=2.2e-08
+mp2 mp2_d mp2_g mp2_s mp2_b pch W=2.2e-08 L=2.2e-08 AD=9.68e-16 AS=9.68e-16
 vmp2_d out mp2_d DC 0
 vmp2_g b mp2_g DC 0
 vmp2_s vdd mp2_s DC 0
 vmp2_b vdd mp2_b DC 0
-mn1 mn1_d mn1_g mn1_s mn1_b nch W=2.2e-08 L=2.2e-08
+mn1 mn1_d mn1_g mn1_s mn1_b nch W=2.2e-08 L=2.2e-08 AD=9.68e-16 AS=9.68e-16
 vmn1_d out mn1_d DC 0
 vmn1_g a mn1_g DC 0
 vmn1_s x mn1_s DC 0
 vmn1_b 0 mn1_b DC 0
-mn2 mn2_d mn2_g mn2_s mn2_b nch W=2.2e-08 L=2.2e-08
+mn2 mn2_d mn2_g mn2_s mn2_b nch W=2.2e-08 L=2.2e-08 AD=9.68e-16 AS=9.68e-16
 vmn2_d x mn2_d DC 0
 vmn2_g b mn2_g DC 0
 vmn2_s 0 mn2_s DC 0

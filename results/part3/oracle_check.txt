@@ -1,8 +1,8 @@
 Oracle check (PASS, limit 1e-06), 3600 simulations:
-  formula                    supply only              max |formula - SPICE| / |SPICE| = 7.03e-07
-  formula                    supply + inputs at VDD   max |formula - SPICE| / |SPICE| = 7.03e-07
-  previous (VDD terminals)   supply only              max |formula - SPICE| / |SPICE| = 8.78e-16
-  previous (VDD terminals)   supply + inputs at VDD   max |formula - SPICE| / |SPICE| = 8.32e-16
+  formula                    supply only              max |formula - SPICE| / |SPICE| = 4.52e-07
+  formula                    supply + inputs at VDD   max |formula - SPICE| / |SPICE| = 4.52e-07
+  previous (VDD terminals)   supply only              max |formula - SPICE| / |SPICE| = 8.99e-16
+  previous (VDD terminals)   supply + inputs at VDD   max |formula - SPICE| / |SPICE| = 8.99e-16
 
 Output and internal node voltages / VDD (min .. max over corners):
   inv   0   out 0.9954..0.9999

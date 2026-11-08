@@ -189,7 +189,8 @@ def build_netlist(gate, bits, corner, control=False):
     lines += ["", "* M<name> d g s b, each terminal through a 0 V ammeter v<name>_<terminal>"]
     for name, mos_type, *terms in GATES[gate]:
         lines.append(f"{name} {' '.join(f'{name}_{t}' for t in TERMINALS)} {MODEL_NAME[mos_type]} "
-                     f"W={config.GATE_W[mos_type]!r} L={config.L!r}")
+                     f"W={config.GATE_W[mos_type]!r} L={config.L!r} "
+                     f"AD={config.GATE_W[mos_type] * config.L_DIFF!r} AS={config.GATE_W[mos_type] * config.L_DIFF!r}")
         lines += [f"v{name}_{t} {node} {name}_{t} DC 0" for t, node in zip(TERMINALS, terms)]
     if control:
         lines += ["", ".control", "set numdgt=15", "op"]

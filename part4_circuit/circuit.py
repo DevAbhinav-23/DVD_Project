@@ -67,7 +67,9 @@ def build_netlist(corner, vector="000000000"):
         nodes = {"a": a, "b": b, "out": out, "x": f"{out}_stack", "vdd": "vdd", "0": "0"}
         for name, kind, *terms in GATES["nand2"]:
             lines.append(f"m{out}_{name} {' '.join(nodes[n] for n in terms)} "
-                         f"{MODEL_NAME[kind]} W={config.GATE_W[kind]:.17g} L={config.L:.17g}")
+                         f"{MODEL_NAME[kind]} W={config.GATE_W[kind]:.17g} L={config.L:.17g} "
+                         f"AD={config.GATE_W[kind] * config.L_DIFF:.17g} "
+                         f"AS={config.GATE_W[kind] * config.L_DIFF:.17g}")
     return "\n".join(lines) + "\n.end\n"
 
 

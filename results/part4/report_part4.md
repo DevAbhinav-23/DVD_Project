@@ -2,7 +2,7 @@
 
 ## Setup and circuit
 
-PTM 22nm MGK, nominal VDD 0.9 V, W=L=22 nm for NMOS and PMOS. Simulator: ngspice-42 : Circuit level simulation program; Python 3.12.3. Package versions accompany the results. The nine inputs are eight data bits plus one even-parity bit. A balanced seven-XOR data tree and a final parity XOR use 32 ordered NAND2 gates (128 transistors). Output 0 is valid even parity; output 1 signals an error.
+PTM 22nm MGK, nominal VDD 0.9 V, W=L=22 nm for NMOS and PMOS. Simulator: ngspice-47 : Circuit level simulation program; Python 3.12.13. Package versions accompany the results. The nine inputs are eight data bits plus one even-parity bit. A balanced seven-XOR data tree and a final parity XOR use 32 ordered NAND2 gates (128 transistors). Output 0 is valid even parity; output 1 signals an error.
 
 ## Terms and evaluation
 
@@ -16,9 +16,9 @@ The plain sum follows the specified hierarchical approximation. The corrected su
 
 | variant                                  |   spice_median_A |   prediction_median_A |   bias_pct |   median_err_pct |   p95_err_pct |   mean_err_pct |   max_err_pct |
 |:-----------------------------------------|-----------------:|----------------------:|-----------:|-----------------:|--------------:|---------------:|--------------:|
-| ML plain sum (spec baseline)             |       1.1582e-06 |            8.1592e-07 |  -22.149   |         22.149   |       53.506  |       24.842   |       66.585  |
-| ML corrected (internal high inputs)      |       1.1582e-06 |            1.1525e-06 |   -0.80898 |          1.0677  |        3.5467 |        1.355   |        6.6018 |
-| ML corrected + primary high inputs       |       1.2154e-06 |            1.2165e-06 |   -0.7454  |          1.0188  |        3.4945 |        1.3182  |        6.3458 |
+| ML plain sum (spec baseline)             |       1.1582e-06 |            8.1592e-07 |  -22.149   |         22.149   |       53.506  |       24.841   |       66.585  |
+| ML corrected (internal high inputs)      |       1.1582e-06 |            1.1525e-06 |   -0.80895 |          1.0676  |        3.5467 |        1.3549  |        6.6018 |
+| ML corrected + primary high inputs       |       1.2154e-06 |            1.2165e-06 |   -0.74537 |          1.0188  |        3.4944 |        1.3182  |        6.3457 |
 | SPICE gate lookup plain (diagnostic)     |       1.1582e-06 |            8.2536e-07 |  -21.512   |         21.512   |       53.854  |       24.61    |       66.974  |
 | SPICE gate lookup corrected (diagnostic) |       1.1582e-06 |            1.1501e-06 |   -0.59754 |          0.59754 |        1.7802 |        0.71197 |        3.172  |
 
@@ -39,7 +39,7 @@ Worst corners by corrected mean error:
 |   corner |     vdd |    temp |   nmos_vth0 |   pmos_vth0 |   mean_err_pct |   p95_err_pct |   max_err_pct |
 |---------:|--------:|--------:|------------:|------------:|---------------:|--------------:|--------------:|
 |       73 | 0.98252 |  81.655 |     0.39697 |    -0.23667 |         6.1824 |        6.4069 |        6.6018 |
-|       35 | 0.98043 |  20.853 |     0.34304 |    -0.23458 |         5.2438 |        5.449  |        5.5677 |
+|       35 | 0.98043 |  20.853 |     0.34304 |    -0.23458 |         5.2438 |        5.4489 |        5.5677 |
 |      144 | 0.98343 |  82.284 |     0.38856 |    -0.24004 |         5.1082 |        5.2055 |        5.2209 |
 |       89 | 0.97028 |  87.787 |     0.34206 |    -0.25193 |         5.1012 |        5.5019 |        5.9568 |
 |      166 | 0.98377 | 104.07  |     0.40439 |    -0.24627 |         4.1884 |        4.5404 |        4.7879 |
@@ -48,19 +48,19 @@ Worst vectors by corrected mean error over corners:
 
 | vector      |   mean_err_pct |   p95_err_pct |   bias_pct |
 |:------------|---------------:|--------------:|-----------:|
-| `111111101` |         1.4591 |        3.7253 |   -0.91492 |
-| `111111011` |         1.4535 |        3.7078 |   -0.91949 |
-| `111110111` |         1.4524 |        3.7143 |   -0.9073  |
-| `111011111` |         1.4523 |        3.7141 |   -0.90729 |
-| `111011101` |         1.4494 |        3.6969 |   -0.93439 |
+| `111111101` |         1.4591 |        3.7253 |   -0.91487 |
+| `111111011` |         1.4535 |        3.7078 |   -0.91944 |
+| `111110111` |         1.4524 |        3.7142 |   -0.90724 |
+| `111011111` |         1.4523 |        3.714  |   -0.90723 |
+| `111011101` |         1.4494 |        3.6969 |   -0.93433 |
 
 Temperature quartiles (descriptive associations, not causal effects):
 
 |   quartile_low_to_high |      min |      max |   runs |   mean_err_pct |   p95_err_pct |
 |-----------------------:|---------:|---------:|-------:|---------------:|--------------:|
-|                      1 | -38.48   |   6.4904 |  25600 |         1.1723 |        3.1838 |
+|                      1 | -38.48   |   6.4904 |  25600 |         1.1723 |        3.1841 |
 |                      2 |   6.7832 |  44.46   |  25600 |         1.2906 |        3.6811 |
-|                      3 |  44.965  |  84.927  |  25600 |         1.4982 |        3.6698 |
+|                      3 |  44.965  |  84.927  |  25600 |         1.4982 |        3.6697 |
 |                      4 |  87.09   | 124.91   |  25600 |         1.4588 |        3.6352 |
 
 The full quartile table also covers VDD and NMOS/PMOS threshold magnitudes. Each corner is reused over every vector; these are 200 PVT draws, not 102,400 independent draws of fabrication and temperature conditions. Worst individual cases and both per-corner/per-vector summaries accompany this report.

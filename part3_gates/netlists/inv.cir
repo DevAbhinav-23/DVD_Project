@@ -141,12 +141,12 @@ vsupply vdd 0 DC 0.8422082664615785
 vin_a a 0 DC 0.8422082664615785
 
 * M<name> d g s b, each terminal through a 0 V ammeter v<name>_<terminal>
-mp1 mp1_d mp1_g mp1_s mp1_b pch W=2.2e-08 L=2.2e-08
+mp1 mp1_d mp1_g mp1_s mp1_b pch W=2.2e-08 L=2.2e-08 AD=9.68e-16 AS=9.68e-16
 vmp1_d out mp1_d DC 0
 vmp1_g a mp1_g DC 0
 vmp1_s vdd mp1_s DC 0
 vmp1_b vdd mp1_b DC 0
-mn1 mn1_d mn1_g mn1_s mn1_b nch W=2.2e-08 L=2.2e-08
+mn1 mn1_d mn1_g mn1_s mn1_b nch W=2.2e-08 L=2.2e-08 AD=9.68e-16 AS=9.68e-16
 vmn1_d out mn1_d DC 0
 vmn1_g a mn1_g DC 0
 vmn1_s 0 mn1_s DC 0
