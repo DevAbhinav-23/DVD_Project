@@ -6,10 +6,10 @@ Each NAND's input bits come from Boolean evaluation of the shared circuit graph.
 
 Number of NANDs in each ordered input state: `00`: 8, `01`: 16, `10`: 0, `11`: 8.
 
-1. Sum 32 isolated gate leakages: **1.02076189e-06 A**.
-2. Add internal high-input gate currents: **2.05074528e-07 A**.
-3. Corrected circuit estimate: **1.22583642e-06 A**.
+1. Sum 32 isolated gate leakages: **1.02638809e-06 A**.
+2. Add internal high-input gate currents: **2.09419290e-07 A**.
+3. Corrected circuit estimate: **1.23580738e-06 A**.
 4. Complete-circuit SPICE reference: **1.24359165e-06 A**.
-5. Relative error = |estimate - reference| / |reference| = **1.4277%**.
+5. Relative error = |estimate - reference| / |reference| = **0.6260%**.
 
 `example_gate_breakdown.csv` gives all 32 contributions and their input connections. All currents are amperes; 1e-6 A equals one microampere.

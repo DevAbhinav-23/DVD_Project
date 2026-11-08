@@ -37,14 +37,16 @@
  },
  "nmos_on/lightgbm": {
   "id": {
-   "num_leaves": 31
+   "num_leaves": 15,
+   "max_depth": 6
   },
   "ig": {
    "num_leaves": 15,
    "max_depth": 6
   },
   "is": {
-   "num_leaves": 31
+   "num_leaves": 15,
+   "max_depth": 6
   },
   "ib": {
    "num_leaves": 15,
@@ -130,10 +132,11 @@
    "max_depth": 6
   },
   "is": {
-   "num_leaves": 31
+   "num_leaves": 63
   },
   "ib": {
-   "num_leaves": 31
+   "num_leaves": 15,
+   "max_depth": 6
   }
  },
  "nmos_off/mlp": {
@@ -305,7 +308,7 @@
    "num_leaves": 31
   },
   "ib": {
-   "num_leaves": 63
+   "num_leaves": 31
   }
  },
  "pmos_off/mlp": {
