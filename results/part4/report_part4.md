@@ -16,17 +16,17 @@ The plain sum follows the specified hierarchical approximation. The corrected su
 
 | variant                                  |   spice_median_A |   prediction_median_A |   bias_pct |   median_err_pct |   p95_err_pct |   mean_err_pct |   max_err_pct |
 |:-----------------------------------------|-----------------:|----------------------:|-----------:|-----------------:|--------------:|---------------:|--------------:|
-| ML plain sum (spec baseline)             |       1.1582e-06 |            8.2929e-07 |  -21.672   |         21.672   |       53.578  |       24.753   |       67.112  |
-| ML corrected (internal high inputs)      |       1.1582e-06 |            1.148e-06  |   -1.0956  |          1.3661  |        3.5026 |        1.5489  |        6.4622 |
-| ML corrected + primary high inputs       |       1.2154e-06 |            1.2123e-06 |   -1.1083  |          1.3537  |        3.4309 |        1.5412  |        6.1938 |
+| ML plain sum (spec baseline)             |       1.1582e-06 |            8.1592e-07 |  -22.149   |         22.149   |       53.506  |       24.842   |       66.585  |
+| ML corrected (internal high inputs)      |       1.1582e-06 |            1.1525e-06 |   -0.80898 |          1.0677  |        3.5467 |        1.355   |        6.6018 |
+| ML corrected + primary high inputs       |       1.2154e-06 |            1.2165e-06 |   -0.7454  |          1.0188  |        3.4945 |        1.3182  |        6.3458 |
 | SPICE gate lookup plain (diagnostic)     |       1.1582e-06 |            8.2536e-07 |  -21.512   |         21.512   |       53.854  |       24.61    |       66.974  |
 | SPICE gate lookup corrected (diagnostic) |       1.1582e-06 |            1.1501e-06 |   -0.59754 |          0.59754 |        1.7802 |        0.71197 |        3.172  |
 
-Corrected mean error is **1.549%**, corresponding to 98.451% mean accuracy under the project's 100-minus-mean-relative-error convention. The approximate 1% mean-error objective is **not met**. The submission reports the prescribed rail-input plain sum alongside this correction. Both use the Part 3 NAND2 lookup derived from the four saved transistor models.
+Corrected mean error is **1.355%**, corresponding to 98.645% mean accuracy under the project's 100-minus-mean-relative-error convention. The approximate 1% mean-error objective is **not met**. The submission reports the prescribed rail-input plain sum alongside this correction. Both use the Part 3 NAND2 lookup derived from the four saved transistor models.
 
-The isolated NAND2 baseline has 1.980% mean error and 4.899% p95 error. Summation can average some transistor-model errors, while inter-gate analog loading introduces additional error. Even the corrected SPICE-gate diagnostic has 0.712% mean error against full-circuit SPICE; the rail-input approximation itself is imperfect.
+The isolated NAND2 baseline has 1.708% mean error and 5.035% p95 error. Summation can average some transistor-model errors, while inter-gate analog loading introduces additional error. Even the corrected SPICE-gate diagnostic has 0.712% mean error against full-circuit SPICE; the rail-input approximation itself is imperfect.
 
-Using the full-circuit current as the common denominator, the mean signed error decomposes exactly into -0.346 percentage points from replacing isolated SPICE-gate currents with ML currents, and -0.699 percentage points from composing isolated gates with the input-current correction. These signed components can cancel; they are not an additive decomposition of absolute errors.
+Using the full-circuit current as the common denominator, the mean signed error decomposes exactly into -0.151 percentage points from replacing isolated SPICE-gate currents with ML currents, and -0.699 percentage points from composing isolated gates with the input-current correction. These signed components can cancel; they are not an additive decomposition of absolute errors.
 
 ## Validation
 
@@ -36,32 +36,32 @@ All recorded gate outputs passed Boolean checks. Maximum internal NAND output de
 
 Worst corners by corrected mean error:
 
-|   corner |     vdd |     temp |   nmos_vth0 |   pmos_vth0 |   mean_err_pct |   p95_err_pct |   max_err_pct |
-|---------:|--------:|---------:|------------:|------------:|---------------:|--------------:|--------------:|
-|       53 | 0.89907 | 111.13   |     0.38113 |    -0.23837 |         6.0452 |        6.2939 |        6.4622 |
-|       70 | 0.91207 | -32.379  |     0.3621  |    -0.2585  |         4.7782 |        4.9496 |        5.0491 |
-|      104 | 0.94789 |  -8.7214 |     0.33651 |    -0.26985 |         4.6035 |        4.7379 |        4.7984 |
-|       68 | 0.94141 | 104.48   |     0.3326  |    -0.27644 |         4.5274 |        4.7697 |        4.7991 |
-|      162 | 0.85331 |  88.213  |     0.34963 |    -0.23291 |         4.3546 |        4.6121 |        4.8002 |
+|   corner |     vdd |    temp |   nmos_vth0 |   pmos_vth0 |   mean_err_pct |   p95_err_pct |   max_err_pct |
+|---------:|--------:|--------:|------------:|------------:|---------------:|--------------:|--------------:|
+|       73 | 0.98252 |  81.655 |     0.39697 |    -0.23667 |         6.1824 |        6.4069 |        6.6018 |
+|       35 | 0.98043 |  20.853 |     0.34304 |    -0.23458 |         5.2438 |        5.449  |        5.5677 |
+|      144 | 0.98343 |  82.284 |     0.38856 |    -0.24004 |         5.1082 |        5.2055 |        5.2209 |
+|       89 | 0.97028 |  87.787 |     0.34206 |    -0.25193 |         5.1012 |        5.5019 |        5.9568 |
+|      166 | 0.98377 | 104.07  |     0.40439 |    -0.24627 |         4.1884 |        4.5404 |        4.7879 |
 
 Worst vectors by corrected mean error over corners:
 
 | vector      |   mean_err_pct |   p95_err_pct |   bias_pct |
 |:------------|---------------:|--------------:|-----------:|
-| `111111101` |         1.6424 |        3.5733 |    -1.3445 |
-| `111011101` |         1.6367 |        3.6082 |    -1.3314 |
-| `111110111` |         1.6358 |        3.5524 |    -1.337  |
-| `111011111` |         1.6357 |        3.5522 |    -1.337  |
-| `101111101` |         1.6306 |        3.5956 |    -1.3237 |
+| `111111101` |         1.4591 |        3.7253 |   -0.91492 |
+| `111111011` |         1.4535 |        3.7078 |   -0.91949 |
+| `111110111` |         1.4524 |        3.7143 |   -0.9073  |
+| `111011111` |         1.4523 |        3.7141 |   -0.90729 |
+| `111011101` |         1.4494 |        3.6969 |   -0.93439 |
 
 Temperature quartiles (descriptive associations, not causal effects):
 
 |   quartile_low_to_high |      min |      max |   runs |   mean_err_pct |   p95_err_pct |
 |-----------------------:|---------:|---------:|-------:|---------------:|--------------:|
-|                      1 | -38.48   |   6.4904 |  25600 |         1.3306 |        3.1892 |
-|                      2 |   6.7832 |  44.46   |  25600 |         1.2401 |        2.9564 |
-|                      3 |  44.965  |  84.927  |  25600 |         1.1845 |        3.079  |
-|                      4 |  87.09   | 124.91   |  25600 |         2.4403 |        4.3745 |
+|                      1 | -38.48   |   6.4904 |  25600 |         1.1723 |        3.1838 |
+|                      2 |   6.7832 |  44.46   |  25600 |         1.2906 |        3.6811 |
+|                      3 |  44.965  |  84.927  |  25600 |         1.4982 |        3.6698 |
+|                      4 |  87.09   | 124.91   |  25600 |         1.4588 |        3.6352 |
 
 The full quartile table also covers VDD and NMOS/PMOS threshold magnitudes. Each corner is reused over every vector; these are 200 PVT draws, not 102,400 independent draws of fabrication and temperature conditions. Worst individual cases and both per-corner/per-vector summaries accompany this report.
 
