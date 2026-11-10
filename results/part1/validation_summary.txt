@@ -1,13 +1,13 @@
 KCL check: pass if |Id+Ig+Is+Ib| <= 0.001 * max|I| + 1e-13 A
      set     case  rows  median_rel  p95_rel  max_rel  max_abs_A  pass
- uniform  nmos_on  5000    1.98e-12 3.17e-09 3.82e-05   9.30e-16  True
- uniform nmos_off  5000    7.11e-16 2.92e-15 8.48e-15   4.99e-22  True
- uniform  pmos_on  5000    4.13e-13 6.40e-11 2.30e-07   3.24e-17  True
- uniform pmos_off  5000    5.83e-08 1.81e-06 2.28e-04   6.82e-15  True
+ uniform  nmos_on  5000    1.99e-12 3.17e-09 3.82e-05   9.30e-16  True
+ uniform nmos_off  5000    7.03e-16 2.88e-15 9.62e-15   5.70e-22  True
+ uniform  pmos_on  5000    4.59e-13 6.32e-11 2.76e-07   1.05e-16  True
+ uniform pmos_off  5000    5.83e-08 1.80e-06 2.29e-04   6.82e-15  True
 targeted  nmos_on  5000    5.28e-09 1.42e-05 1.07e-03   1.57e-15  True
-targeted nmos_off  5000    7.01e-16 2.68e-15 5.12e-15   1.82e-21  True
-targeted  pmos_on  5000    3.11e-10 2.00e-07 3.51e-05   3.38e-17  True
-targeted pmos_off  5000    1.48e-07 6.02e-04 1.01e+00   1.14e-14  True
+targeted nmos_off  5000    6.83e-16 2.69e-15 5.20e-15   2.40e-21  True
+targeted  pmos_on  5000    3.39e-10 2.12e-07 5.82e-05   3.74e-17  True
+targeted pmos_off  5000    1.48e-07 6.01e-04 1.01e+00   1.14e-14  True
 
 Sanity checks
   uniform   nmos_on   PASS

@@ -9,10 +9,10 @@ leakage of a complete circuit (8 data bits plus 1 parity bit: 9 inputs).
 ## Status
 | Part | What | State | Headline result |
 |---|---|---|---|
-| 1 | Transistor datasets (SPICE) | **Done** | 10,000 rows per case: 5,000 uniform + 5,000 targeted, all checks pass |
-| 2 | ML models per transistor case | **Done** | MLP chosen for all 4 cases, 1.7–2.1% median test error (uniform) |
-| 3 | Gate-level validation | **Done** | 3,600 gate runs: **1.2% median, 5.3% p95 error** vs SPICE |
-| 4 | Circuit-level validation (parity checker) | **Done** | 102,400 runs; corrected error: **1.07% median, 3.55% p95, 1.35% mean** |
+| 1 | Transistor datasets (SPICE) | **Done** | 10,000 rows per case: 5,000 uniform + 5,000 targeted, with junction areas, all checks pass |
+| 2 | ML models per transistor case | **Done** | MLP chosen for 3 cases, LightGBM for PMOS ON; 2.1–5.0% median test error (uniform) |
+| 3 | Gate-level validation | **Done** | 3,600 gate runs: **1.3% median, 4.7% p95 error** vs SPICE |
+| 4 | Circuit-level validation (parity checker) | **Done** | 102,400 runs; corrected error: **1.14% median, 3.63% p95, 1.40% mean** |
 | 5 | `run_all`, report, final packaging | **In progress** | `run_all.py` and Part 4 report done; final combined team report/packaging remain |
 
 For Part 4 implementation details, read [Conventions](#conventions), the Part 3 results, and
@@ -23,36 +23,37 @@ For Part 4 implementation details, read [Conventions](#conventions), the Part 3 
 
 | Level | Mean error | Median | p95 |
 |---|---|---|---|
-| Transistor models, uniform test (mean of 4 cases × 4 terminals) | 3.0% | 1.7–2.1% per case | 7.0–9.6% per case |
-| Transistor models, targeted test (gate operating points) | 7.2% | 2.0–4.5% per case | 11–57% per case |
-| **Gates, all 3,600 runs (18 cases × 200 corners)** | **1.8% (98.2% mean accuracy)** | **1.2%** | **5.3%** |
-| Gates per type: AND2 / OR2 / INV / NAND2 / NOR2 | 1.2% / 1.3% / 1.9% / 1.7% / 2.8% | 1.0% / 1.0% / 1.3% / 1.3% / 1.8% | 3.2% / 3.4% / 5.6% / 5.0% / 7.9% |
-| **Nine-input parity circuit, corrected supply estimate (102,400 runs)** | **1.35% (98.65% mean accuracy)** | **1.07%** | **3.55%** |
-| Circuit, plain gate sum (spec baseline) | 24.84% | 22.15% | 53.51% |
+| Transistor models, uniform test (mean of 4 cases × 4 terminals) | 4.8% | 2.1–5.0% per case | 8.2–21% per case |
+| Transistor models, targeted test (gate operating points) | 8.0% | 3.3–6.7% per case | 14–51% per case |
+| **Gates, all 3,600 runs (18 cases × 200 corners)** | **1.8% (98.2% mean accuracy)** | **1.3%** | **4.7%** |
+| Gates per type: AND2 / OR2 / INV / NAND2 / NOR2 | 1.2% / 1.5% / 1.7% / 1.8% / 2.8% | 0.9% / 1.3% / 1.4% / 1.4% / 1.9% | 3.2% / 3.7% / 4.5% / 4.6% / 6.9% |
+| **Nine-input parity circuit, corrected supply estimate (102,400 runs)** | **1.40% (98.60% mean accuracy)** | **1.14%** | **3.63%** |
+| Circuit, plain gate sum (spec baseline) | 24.76% | 21.63% | 54.08% |
 
 **Highest error:**
-- **Gate level: NOR2.** NOR2 `10` (A = 1, B = 0) has the highest median and p95 error (3.2%, 10.9%);
-  NOR2 `11` has the highest mean (4.3%). In both, the whole leakage is the Is of one OFF PMOS whose drain
-  sits at the stack node y (0.15–0.2 or 0.9 × VDD), a region with only ~20 training rows. INV `1` and
-  NAND2 `11` (2.0% median, 6.3% p95) are next. Apart from one run, the worst runs are 13–15% off (NOR2 11,
-  INV 1, NAND2 11 at extreme temperatures). **One run has the wrong sign:** NOR2 `11` at corner 76
+- **Gate level: NOR2.** NOR2 `10` (A = 1, B = 0) has the highest median error (3.3%);
+  NOR2 `11` has the highest mean and p95 (4.5%, 9.3%). In both, the whole leakage is the Is of one OFF PMOS whose drain
+  sits at the stack node y (0.15–0.2 or 0.9 × VDD), a region with only ~20 training rows. NAND2 `10`
+  (1.7% median) is next. Apart from one run, the worst runs are 14–15% off (NOR2 11 and NOR2 10 at cold
+  corners). **One run has the wrong sign:** NOR2 `11` at corner 76
   (−38 °C), the smallest leakage of all 3,600 runs (1.6e-11 A). There the OFF PMOS Is is the difference
   of a channel current (−3.3e-11 A) and a gate current (+1.7e-11 A) that nearly cancel; the model gets
-  the magnitude within 1% but the sign wrong (199% relative error, 3e-11 A absolute).
-- **Transistor level: the ON models (NMOS ON, PMOS ON) on the targeted test**, 10.3–10.9% mean,
-  4.2–4.5% median, 55–57% p95. The error is all in Id and Is at |Vds| of µV to mV (18–19% mean each),
+  the magnitude within 1% but the sign wrong (187% relative error, 3e-11 A absolute).
+- **Transistor level: the ON models (NMOS ON, PMOS ON) on the targeted test**, 10.2–11.4% mean,
+  4.5–6.7% median, 40–51% p95. The error is all in Id and Is at |Vds| of µV to mV (16–18% mean each),
   where the channel current crosses zero. The gate leakage formula never uses those two currents; Ig and
-  Ib of the same devices are at 2–3% median.
+  Ib of the same devices are at 1.7–6% median.
 - **Lowest error:** AND2 / OR2 (0.9–1.2% median per input case).
 
 ## Handoff in short
 **Done (Parts 1–3):**
 - SPICE datasets for the 4 transistor cases (5k uniform + 5k targeted = 10k rows each), validated.
-  Part 2 was retrained from scratch on this data (2026-11-08) and Parts 3–4 re-evaluated with the new models.
+  Re-simulated on 2026-11-10 with drain/source junction areas (AD = AS = W × 2 Lmin, same samples), then
+  Part 2 retrained from scratch and Parts 3–4 re-evaluated with the new models.
 - 4 model types compared per case; the MLP chosen and saved (`results/part2/models/*.joblib`).
 - Learning curve over 1k / 2k / 5k / 7k training rows.
 - 5 gates × all input cases × 200 shared corners simulated in SPICE, oracle check passed, ML gate
-  leakage computed and compared (1.2% median, 1.8% mean error).
+  leakage computed and compared (1.3% median, 1.8% mean error).
 
 **Part 4 implementation:** `part4_circuit/` builds a nine-input parity checker from 32 NAND2s,
 checks all 512 logic vectors, simulates the complete circuit at the existing 200 corners, and
@@ -253,53 +254,59 @@ All checks pass ([results/part1/validation_summary.txt](results/part1/validation
   (median + p95 relative error) / 2.
 
 ### Results
-The MLP wins every case. Validation set (both datasets), mean over the four terminals, median / p95
+The MLP wins NMOS ON, NMOS OFF and PMOS OFF; LightGBM wins PMOS ON. Validation set (both datasets), mean over the four terminals, median / p95
 relative error (`results/part2/comparison_table.md`):
 
-| Case | Poly ridge | Random Forest | LightGBM | **MLP** |
+| Case | Poly ridge | Random Forest | LightGBM | MLP |
 |---|---|---|---|---|
-| NMOS ON | 14.1% / 74% | 13.1% / 69% | 5.8% / 31% | **2.7% / 30%** |
-| NMOS OFF | 15.8% / 77% | 6.8% / 42% | 3.9% / 26% | **1.7% / 8.9%** |
-| PMOS ON | 12.4% / 67% | 12.6% / 60% | 5.5% / 30% | **2.5% / 32%** |
-| PMOS OFF | 15.7% / 78% | 7.5% / 44% | 3.8% / 27% | **2.0% / 11%** |
+| NMOS ON | 14.0% / 74% | 13.3% / 68% | 5.8% / 31% | **2.8% / 29%** |
+| NMOS OFF | 19.4% / 99% | 9.1% / 51% | 5.5% / 33% | **2.8% / 12%** |
+| PMOS ON | 12.4% / 67% | 12.9% / 61% | **5.4% / 30%** | 2.5% / 37% |
+| PMOS OFF | 21.0% / 94% | 9.9% / 52% | 5.5% / 31% | **2.9% / 13%** |
 
-Test set, chosen MLP, mean over terminals (`results/part2/test_metrics.md`, parity plots in
+- **PMOS ON:** the selection score, (median + p95) / 2, is 17.6 for LightGBM and 19.7 for the MLP, so
+  LightGBM is chosen by the fixed rule even though the MLP's median is half as large. Swapping in the MLP
+  for PMOS ON was checked as a variant only: gates 1.26% median (vs 1.33%), circuit 1.33% mean (vs 1.40%).
+  The rule's choice is kept so no model is selected on the gate or circuit test results.
+- **OFF cases got harder with junction areas:** the junction leakage roughly doubles the OFF body current,
+  and Ib is now at 4–7% median error (Id, Ig, Is stay at 1.6–2.5%). Ib is a small part of gate leakage.
+
+Test set, chosen model, mean over terminals (`results/part2/test_metrics.md`, parity plots in
 `results/part2/plots/parity_<case>[_targeted].png`):
 
 | Case | Uniform test: median / p95 | Targeted test: median / p95 |
 |---|---|---|
-| NMOS ON | 2.1% / 8.0% | 4.2% / 55% |
-| NMOS OFF | 1.7% / 8.2% | 2.0% / 11% |
-| PMOS ON | 1.7% / 7.0% | 4.5% / 57% |
-| PMOS OFF | 1.9% / 9.6% | 2.1% / 12% |
+| NMOS ON (MLP) | 2.1% / 8.2% | 4.5% / 51% |
+| NMOS OFF (MLP) | 2.6% / 11% | 3.5% / 15% |
+| PMOS ON (LightGBM) | 5.0% / 21% | 6.7% / 40% |
+| PMOS OFF (MLP) | 2.6% / 13% | 3.3% / 14% |
 
-Retrained from scratch on the 5k uniform + 5k targeted data (2026-11-08). Compared with the earlier
-10k uniform + 5k targeted models, the uniform test median rose by 0.1–0.4 points (half the uniform
-rows) while the targeted test and the gate and circuit errors stayed level or improved.
+Retrained from scratch on the 5k uniform + 5k targeted data with junction areas (2026-11-10). Before the
+areas were added (2026-11-08), all four cases chose the MLP at 1.7–2.1% uniform median; gates were 1.22%
+median and the circuit 1.35% mean.
 
 - **Without the targeted data**, the same models scored 1.1–1.3% on the uniform test but 120–180%
   median error on the targeted ON test points, with the sign of Id and Is right in only 42–72% of them.
 - **The remaining large targeted errors** are Id and Is of ON devices at |Vds| of µV to mV, where the
   channel current passes through zero. Part 3's leakage formula does not use those currents. The Ig and
-  Ib of the same devices, which it does use, are at 2.1–2.6% median error.
+  Ib of the same devices, which it does use, are at 1.7–6% median error.
 
-**Learning curve** (`results/part2/learning_curve.csv`, `plots/learning_curve.png`): the chosen MLP
+**Learning curve** (`results/part2/learning_curve.csv`, `plots/learning_curve.png`): the chosen model
 retrained on nested random subsets of the training split, scored on both test sets. Each cell is
 median / p95 on the uniform test · median / p95 on the targeted test.
 
 | Case | 1k | 2k | 5k | 7k (full) |
 |---|---|---|---|---|
-| NMOS ON | 4.0% / 22% · 9.0% / 142% | 2.5% / 14% · 5.9% / 116% | 2.2% / 8.7% · 4.3% / 60% | 2.1% / 8.1% · 4.4% / 62% |
-| NMOS OFF | 4.1% / 40% · 5.2% / 45% | 2.0% / 16% · 2.5% / 24% | 1.5% / 8.9% · 1.9% / 13% | 1.7% / 8.2% · 1.8% / 12% |
-| PMOS ON | 2.8% / 14% · 7.3% / 126% | 1.8% / 8.6% · 5.0% / 119% | 1.8% / 7.3% · 4.4% / 70% | 1.7% / 7.1% · 4.4% / 56% |
-| PMOS OFF | 4.6% / 47% · 5.5% / 48% | 2.0% / 20% · 2.4% / 26% | 1.6% / 8.8% · 1.9% / 13% | 1.9% / 9.6% · 2.0% / 13% |
+| NMOS ON (MLP) | 4.8% / 25% · 10.9% / 124% | 2.5% / 15% · 6.0% / 113% | 2.1% / 8.7% · 4.3% / 61% | 2.1% / 8.2% · 4.3% / 59% |
+| NMOS OFF (MLP) | 11.6% / 118% · 17.9% / 147% | 6.3% / 35% · 9.1% / 53% | 3.0% / 13% · 4.4% / 20% | 2.7% / 11% · 3.4% / 15% |
+| PMOS ON (LightGBM) | 11.6% / 43% · 14.9% / 128% | 8.5% / 33% · 11.2% / 79% | 5.6% / 23% · 7.7% / 43% | 5.0% / 20% · 6.7% / 40% |
+| PMOS OFF (MLP) | 15.0% / 93% · 19.8% / 155% | 6.5% / 33% · 9.0% / 41% | 2.7% / 15% · 4.4% / 20% | 2.7% / 13% · 3.1% / 15% |
 
-Re-run on the 5k uniform + 5k targeted data (7,000 training rows per case). The full-size fits differ
-slightly from the saved models because the MLP is retrained (run-to-run variance of about 0.1–0.3 points).
-- **Uniform test:** the median levels off at 1.5–2.2% from 5k rows on; the p95 at 7–10%.
-- **Targeted test:** the OFF cases level off at 5k (about 1.9% / 13%). The ON p95 drops sharply up to
-  5k (116–119% to 60–70%) and PMOS ON keeps improving to 7k (56%), so more targeted ON rows would still
-  help the ON Id/Is tails (which the gate formula does not use).
+Re-run on the junction-area data (7,000 training rows per case).
+- **NMOS ON** levels off at 5k rows on both test sets.
+- **OFF cases** still improve from 5k to 7k, most on the targeted test (4.4% to 3.1–3.4% median). With
+  junction areas the OFF body current is harder to fit, so more rows would still help them.
+- **PMOS ON (LightGBM)** also keeps improving up to 7k, but stays above the MLP's level on typical points.
 
 ### Using the models
 ```python
@@ -351,17 +358,17 @@ currents = m.predict(df[INPUTS])   # 12 input columns -> DataFrame id, ig, is, i
   currents both agree, for ML currents the plain sum is far worse (below).
 
 ### Results
-Over all 3,600 gate runs: **median error 1.2%, p95 5.3%, mean 1.8% (98.2% mean accuracy), bias −0.3%**,
+Over all 3,600 gate runs: **median error 1.3%, p95 4.7%, mean 1.8% (98.2% mean accuracy), bias −0.4%**,
 every run but one with the right sign (NOR2 11 at corner 76, see [Results at a glance](#results-at-a-glance)) (`results/part3/gate_table.md`, `plots/gate_parity.png`). Per case
 (median / p95 error):
 
 | Gate | 0 / 00 | 1 / 01 | 10 | 11 |
 |---|---|---|---|---|
-| INV | 0.9% / 3.1% | 2.0% / 6.3% | | |
-| NAND2 | 1.5% / 4.9% | 0.9% / 3.1% | 1.0% / 3.4% | 2.0% / 6.3% |
-| NOR2 | 0.9% / 3.1% | 1.3% / 4.2% | 3.2% / 10.9% | 2.7% / 8.4% |
-| AND2 | 0.9% / 2.9% | 0.9% / 3.0% | 0.9% / 2.9% | 1.2% / 3.8% |
-| OR2 | 0.9% / 2.9% | 0.9% / 2.9% | 1.2% / 4.1% | 0.9% / 3.2% |
+| INV | 1.4% / 4.2% | 1.3% / 5.2% | | |
+| NAND2 | 1.4% / 5.2% | 1.4% / 4.2% | 1.7% / 4.2% | 1.3% / 5.1% |
+| NOR2 | 1.4% / 4.2% | 1.0% / 3.6% | 3.3% / 7.7% | 2.9% / 9.3% |
+| AND2 | 0.8% / 3.3% | 0.9% / 3.0% | 0.9% / 3.0% | 1.1% / 3.5% |
+| OR2 | 1.1% / 3.5% | 1.1% / 3.5% | 1.4% / 3.7% | 1.4% / 4.1% |
 
 Inputs are written A then B, e.g. NAND2 `01` = A 0, B 1.
 - **Formula and retraining both mattered** (overall median / p95, Vg snapped to the rail):
@@ -369,14 +376,14 @@ Inputs are written A then B, e.g. NAND2 `01` = A 0, B 1.
   | | plain VDD-terminal sum | KCL formula |
   |---|---|---|
   | uniform-only models | 132% / 275% (wrong sign in 14 cases) | 4.4% / 18% |
-  | retrained (uniform + targeted) | 10% / 60% | 1.3% / 5.4% |
+  | retrained (uniform + targeted) | 3.9% / 16% | 1.4% / 5.0% |
 
 - **Least accurate:** NOR2 10 and 11. Their whole leakage is the Is of one OFF PMOS whose drain sits at a
   stack-node voltage (0.15–0.2 or 0.9 × VDD), where the training data has only ~20 rows. NAND2 00 is next.
 - **AND2 / OR2 inverter input:** the internal NAND / NOR output is at most 1.8% of VDD off the rail.
-  Snapping Vg to the rail instead raises the median error by up to 1.1 points (OR2 00: 0.9% to 2.1%).
+  Snapping Vg to the rail instead raises the median error by up to 1.1 points (OR2 00: 1.1% to 1.9%).
 - **Input-source current (question 3):** counting the gate current drawn from inputs held at VDD gives
-  1.1% median, 3.8% p95.
+  1.1% median, 3.7% p95.
 
 `results/part3/gate_predictions.csv` holds one row per run: `gate, inputs, corner, vdd, temp,
 spice_leak, ml_leak` plus the variant columns (`ml_leak_rail_vg`, `spice_leak_with_inputs`,
@@ -387,17 +394,17 @@ spice_leak, ml_leak` plus the variant columns (`ml_leak_rail_vg`, `spice_leak_wi
 ## Part 4 — Circuit-level validation
 
 **Complete:** all 512 vectors at all 200 corners passed input-voltage and gate-logic checks.
-The corrected leakage estimate has 1.07% median, 3.55% p95, 1.35% mean and 6.60% maximum error
-(models retrained on the 5k + 5k data; the earlier models gave 1.37% / 3.50% / 1.55% / 6.46%).
-The plain gate sum has 24.84% mean error. Corrected mean accuracy is 98.65%, so the approximate
+The corrected leakage estimate has 1.14% median, 3.63% p95, 1.40% mean and 6.67% maximum error
+(models retrained on the 5k + 5k data with junction areas; before the areas: 1.07% / 3.55% / 1.35% / 6.60%).
+The plain gate sum has 24.76% mean error. Corrected mean accuracy is 98.60%, so the approximate
 99% objective has not been reached. Seven tests and 1,200 independent `.op`/DC comparisons passed,
 including selected patterns at eight PVT extremes. `run_all.py --part4-only` was verified end to end.
 
 See the [Part 4 report](results/part4/report_part4.md), [metrics](results/part4/circuit_table.md),
 and [worked calculation](results/part4/example_calculation.md). The corrected SPICE-gate diagnostic
 still differs from the full circuit by 0.71% on average, showing the effect of the isolated-gate
-approximation even with SPICE gate currents. The worst corrected corner is 73 (81.66 C, VDD
-0.98252 V): 6.18% mean error across vectors and 6.60% in the worst case. High-temperature corners
+approximation even with SPICE gate currents. The worst corrected corner is 72 (124.91 C, VDD
+0.94936 V): 5.60% mean error across vectors and 6.67% in the worst case. High-temperature corners
 have higher errors on average, but some cold corners are also among the worst.
 
 The submission uses the four saved transistor models and the Part 3 NAND2 lookup with Boolean
