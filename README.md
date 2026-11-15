@@ -13,7 +13,7 @@ leakage of a complete circuit (8 data bits plus 1 parity bit: 9 inputs).
 | 2 | ML models per transistor case | **Done** | MLP chosen for 3 cases, LightGBM for PMOS ON; 2.1–5.0% median test error (uniform) |
 | 3 | Gate-level validation | **Done** | 3,600 gate runs: **1.3% median, 4.7% p95 error** vs SPICE |
 | 4 | Circuit-level validation (parity checker) | **Done** | 102,400 runs; corrected error: **1.14% median, 3.63% p95, 1.40% mean** |
-| 5 | `run_all`, report, final packaging | **In progress** | `run_all.py` and Part 4 report done; final combined team report/packaging remain |
+| 5 | Reproduction and report | **Done** | `run_all.py`, combined LaTeX report, and Overleaf package are available |
 
 For Part 4 implementation details, read [Conventions](#conventions), the Part 3 results, and
 [Part 4](#part-4--circuit-level-validation).
@@ -100,7 +100,7 @@ Every part follows these. Part 4 must too, or its numbers are not comparable wit
 | 1 | Does the parity checker have 8 inputs or 9 inputs? | **Decided by the Part 4 owner:** 8 data bits + 1 parity bit, 512 vectors |
 | 2 | Should the ML side solve the internal node voltages itself, or use the SPICE-recorded ones? | **Decided:** gate models use Part 3 SPICE-recorded voltages; circuit ML uses only the gate lookup and Boolean logic, with no circuit-SPICE voltages |
 | 3 | Does gate-tunnelling current drawn through the input sources count as leakage? | **Open.** Main result excludes it; the variant including it is reported |
-| 4 | Is a 5k uniform + 5k targeted (non-uniform Vd/Vs) mix acceptable for the 10k rows per case? | **Being asked.** The spec allows changing the sample count |
+| 4 | What sampling did the final run use? | 5,000 uniform and 5,000 targeted rows per case. The brief specifies uniform sampling for the initial dataset. |
 
 ## Repository layout
 ```
@@ -140,7 +140,8 @@ results/part4/          # circuit netlist, compressed records/predictions, metri
 Each later part gets its own `partN_*/` folder and writes its outputs under `results/partN/`.
 
 ## Setup
-Requires ngspice (developed with ngspice-42) and Python 3.12.
+Requires ngspice and Python 3.12. The saved dataset and gate runs used ngspice-42. The
+saved parity circuit sweep used ngspice-47.
 On Ubuntu/WSL2: `sudo apt-get install ngspice python3-venv python3-pip`.
 ```
 python3 -m venv .venv
@@ -358,7 +359,7 @@ currents = m.predict(df[INPUTS])   # 12 input columns -> DataFrame id, ig, is, i
   currents both agree, for ML currents the plain sum is far worse (below).
 
 ### Results
-Over all 3,600 gate runs: **median error 1.3%, p95 4.7%, mean 1.8% (98.2% mean accuracy), bias −0.4%**,
+Over all 3,600 gate runs: **median error 1.33%, p95 4.71%, mean 1.81% (98.2% mean accuracy), bias −0.28%**,
 every run but one with the right sign (NOR2 11 at corner 76, see [Results at a glance](#results-at-a-glance)) (`results/part3/gate_table.md`, `plots/gate_parity.png`). Per case
 (median / p95 error):
 
@@ -396,9 +397,10 @@ spice_leak, ml_leak` plus the variant columns (`ml_leak_rail_vg`, `spice_leak_wi
 **Complete:** all 512 vectors at all 200 corners passed input-voltage and gate-logic checks.
 The corrected leakage estimate has 1.14% median, 3.63% p95, 1.40% mean and 6.67% maximum error
 (models retrained on the 5k + 5k data with junction areas; before the areas: 1.07% / 3.55% / 1.35% / 6.60%).
-The plain gate sum has 24.76% mean error. Corrected mean accuracy is 98.60%, so the approximate
-99% objective has not been reached. Seven tests and 1,200 independent `.op`/DC comparisons passed,
-including selected patterns at eight PVT extremes. `run_all.py --part4-only` was verified end to end.
+The plain gate sum has 24.76% mean error. Corrected mean accuracy is 98.60%, below the 99% objective.
+The saved ngspice-47 sweep reports logic checks for all cases. The seven structural tests,
+end-to-end `run_all.py --part4-only` check, and 1,200 independent `.op`/DC comparisons
+are documented for the earlier Part 4 run.
 
 See the [Part 4 report](results/part4/report_part4.md), [metrics](results/part4/circuit_table.md),
 and [worked calculation](results/part4/example_calculation.md). The corrected SPICE-gate diagnostic
@@ -492,7 +494,7 @@ python run_all.py
 Use the Python executable from your virtual environment. This machine's Ubuntu environment
 is `/home/skd/.venvs/dvd-project/bin/python`; the documented `.venv` setup also works.
 Worker count is adjustable; six is the conservative default for this 12-thread machine.
-No GPU or synthesis tool is needed. The full sweep uses ngspice 42 and Python 3.12.
+The saved full sweep used ngspice-47 and Python 3.12.13.
 
 ### Outputs in `results/part4/`
 
@@ -508,7 +510,7 @@ No GPU or synthesis tool is needed. The full sweep uses ngspice 42 and Python 3.
 - `environment_freeze.txt`, `artifact_hashes.json`: complete package versions and input/code provenance.
 - `report_part4.md`, `error_decomposition.json`, `errors_by_pvt_quartile.csv`: report and error analysis.
 - `example_calculation.md`, `example_gate_breakdown.csv`: a worked example with all 32 gate contributions.
-- `op_dc_crosscheck.json`: agreement with an independently initialized `.op` pilot, when requested.
+- `op_dc_crosscheck.json`: historical comparison with an independently initialized `.op` pilot.
 
 Read compressed records directly with `pandas.read_csv(path, dtype={"vector": str})`.
 The string dtype preserves leading zeros in the nine-bit vector.
@@ -519,20 +521,11 @@ retain their existing prediction errors; the 99% accuracy objective is evaluated
 
 ---
 
-## Part 5 — Final deliverables (to do)
-1. **Done:** `run_all.py` regenerates all stages in order with fixed seeds; `--part4-only` reuses committed upstream artifacts. The Part 4 path was tested end to end; the hours-long upstream retraining pipeline was not rerun for this addition.
-2. **Done for Part 4:** simulator and Python/package versions are in `results/part4/`; direct package versions remain pinned in `requirements.txt`.
-3. Compile the model comparison table, the chosen-model test metrics, the gate table and the circuit table.
-4. Include all plots: KCL check, trend plots, predicted-vs-SPICE plots, learning curve, gate parity and
-   circuit parity.
-5. Write the combined team report (the Part 4 section is available in `results/part4/report_part4.md`):
-   - **Setup:** model file, VDD, circuit, simulator and version.
-   - **Data generation:** sampling (uniform and why the targeted set exists), netlists, split, data checks.
-   - **Models:** the four model types, hyperparameters and preprocessing, comparison table, final choice.
-   - **Gate results:** most and least accurate gates and input combinations.
-   - **Circuit results:** circuit accuracy compared with gate accuracy.
-   - **Error analysis:** where the largest errors occur and why.
-   - **Limitations and improvements.**
+## Part 5 — Final deliverables
+
+- The [combined LaTeX report](report/completed/project_report.tex) includes the setup, sampling and validation, model comparison, gate and circuit results, and limitations. Import the [Overleaf ZIP](report/completed_report_overleaf.zip), select `project_report.tex` as the main document, and compile to verify the PDF layout.
+- [`run_all.py`](run_all.py) runs the regeneration stages in order with fixed seeds. Use `--part4-only` to reuse the saved upstream artifacts. The Part 4 mode was tested end to end on the earlier Part 4 run.
+- [Model comparison](results/part2/comparison_table.md), [test metrics](results/part2/test_metrics.md), [gate results](results/part3/gate_table.md), and [circuit results](results/part4/circuit_table.md) are available separately alongside the datasets, netlists, saved models, and figures.
 
 ---
 
@@ -542,7 +535,7 @@ retain their existing prediction errors; the 99% accuracy objective is evaluated
 | Member 1 | Part 1: transistor datasets | Done |
 | Member 2 | Part 2: ML training and model selection | Done |
 | Member 3 | Part 3: gate-level validation | Done |
-| Member 4 | Part 4: circuit-level validation and integration (`run_all`) | Done locally; push deferred |
+| Member 4 | Part 4: circuit-level validation and integration (`run_all`) | Done |
 
 Shared items with a single owner: the config file (Member 4), the corner table (Member 3), and the sign
 convention and leakage definition (agreed by everyone before coding).

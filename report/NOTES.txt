@@ -1,32 +1,9 @@
-REPORT DRAFT — NOT FINAL RESULTS
+Final report
 
-Open project_report_draft.tex as the main document. It includes Srikar's
-Part 4 section directly. The separate part4_section.tex contains the same
-section for copying into an existing Overleaf report before \end{document}.
-Do not insert it again into the supplied combined draft.
+Import completed_report_overleaf.zip into Overleaf and set project_report.tex
+as the main document. The same source and figures are in completed/.
+Compile in Overleaf to check the PDF layout before submitting.
 
-Syntax changes to the pasted report:
-- Added amsmath for \text, \operatorname and the new align environment.
-- Added booktabs for \toprule, \midrule and \bottomrule.
-- Added the missing \begin{center} before the Part 2 heading.
-All existing members' prose, numbers and figure references are preserved.
-The existing figure files are copied alongside the main .tex file.
-
-Part 4 added:
-- Nine-input even-parity definition and NAND implementation.
-- 32-gate / 128-transistor topology and ordered input convention.
-- Shared PVT evaluation design and complete-circuit SPICE reference.
-- NAND lookup method, plain sum and signed internal input-current correction.
-- Primary-input-current variant and validation procedure.
-- Error definitions, blank result tables and two figure placeholders.
-- Symbolic worked example with blank numerical calculation.
-- Limitations, diagnostic comparison and reproduction instructions.
-
-Pending before submission:
-- Consistent data generation, retraining and downstream evaluation with AD/AS.
-- Fill Part 4 metrics, plots, numerical example and results discussion.
-- Record final validation outcomes, simulator version and cross-check.
-- Teammates must update their existing selections, numbers and setup wording.
-  Their old claims remain in this draft at the user's request.
-- Compile and inspect layout in a LaTeX environment. Static checks alone
-  do not establish that the document compiles or that pages fit correctly.
+project_report_draft.tex and report_draft_overleaf.zip are earlier drafts.
+The standalone Part 4 sources are reference copies. The final main document
+already includes Part 4.
