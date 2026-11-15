@@ -1,5 +1,5 @@
 {
-  "ml_vs_isolated_spice_mean_signed_pct": -0.15054291474088244,
-  "isolated_spice_vs_full_circuit_mean_signed_pct": -0.6990580831769183,
-  "total_mean_signed_pct": -0.8496009979178009
+  "ml_vs_isolated_spice_mean_signed_pct": 0.016801523382095354,
+  "isolated_spice_vs_full_circuit_mean_signed_pct": -0.6990580831769129,
+  "total_mean_signed_pct": -0.6822565597948176
 }

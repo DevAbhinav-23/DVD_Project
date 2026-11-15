@@ -135,8 +135,7 @@
    "num_leaves": 63
   },
   "ib": {
-   "num_leaves": 15,
-   "max_depth": 6
+   "num_leaves": 31
   }
  },
  "nmos_off/mlp": {
@@ -305,7 +304,8 @@
    "max_depth": 6
   },
   "is": {
-   "num_leaves": 31
+   "num_leaves": 15,
+   "max_depth": 6
   },
   "ib": {
    "num_leaves": 31
