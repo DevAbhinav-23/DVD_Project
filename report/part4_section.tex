@@ -1,0 +1,239 @@
+% Srikar's section. Insert immediately before \end{document}.
+% Numerical results remain blank pending consistent upstream regeneration.
+\clearpage
+\section{Circuit-Level Validation: Parity Checker}
+\label{sec:circuit}
+
+\subsection{Aim}
+This part extends the gate-level method to a complete circuit. The aim is
+to estimate its static supply leakage by combining predictions for its
+individual gates, and compare the estimate with a transistor-level SPICE
+simulation of the complete circuit.
+
+\subsection{Circuit construction}
+The circuit checks eight data bits, $d_0,\ldots,d_7$, together with an
+even-parity bit $p$. Its output is
+\begin{equation}
+e=d_0\oplus d_1\oplus\cdots\oplus d_7\oplus p.
+\end{equation}
+An output of 0 indicates valid even parity; an output of 1 indicates a
+parity error. There are nine primary inputs and $2^9=512$ input vectors.
+The vector order used throughout is $d_0,d_1,\ldots,d_7,p$.
+
+The eight data bits are combined using a balanced XOR tree. Its output is
+then XORed with the parity bit. Each of the eight XOR operations is built
+from four NAND2 gates:
+\begin{align}
+t_1&=\operatorname{NAND}(a,b), &
+t_2&=\operatorname{NAND}(a,t_1),\\
+t_3&=\operatorname{NAND}(b,t_1), &
+a\oplus b&=\operatorname{NAND}(t_2,t_3).
+\end{align}
+The complete circuit therefore contains 32 NAND2 gates and 128 transistors.
+Each NAND2 uses the same topology and minimum transistor sizing as Part 3:
+$W=L=22$\,nm. The intended consistent device setup uses drain and source
+areas $AD=AS=W(2L)$. The transistor netlist contains no ideal logic gates
+and no added output load.
+
+One ordered list of gate connections is used for both Boolean evaluation
+and netlist generation. NAND inputs retain their order: input $a$ drives
+the upper NMOS in the stack and input $b$ drives the lower NMOS. This matters
+because states \texttt{01} and \texttt{10} need not have the same leakage.
+
+\subsection{PVT conditions and SPICE reference}
+The evaluation uses the same 200 PVT corners as Part 3. Each corner specifies
+the supply voltage, temperature, and separate NMOS and PMOS process
+parameters. Evaluating every input vector at every corner gives
+$512\times200=102{,}400$ circuit cases. These are 200 distinct PVT draws,
+each reused for all 512 vectors.
+
+The reference leakage is the current drawn from the complete circuit's
+shared supply, $I_{\mathrm{SPICE}}=-i(\texttt{vsupply})$. Current supplied by
+the separate primary-input sources is excluded from this main definition.
+The simulator records the supply current, primary-input currents, and all
+32 NAND output voltages. A DC sweep enumerates the binary inputs using
+sources that hold each input at exactly 0 or $V_{DD}$. The circuit itself
+remains a transistor-level circuit. Independent operating-point simulations
+provide a cross-check of this sweep method.
+
+\subsection{Hierarchical estimate from the transistor models}
+The circuit estimate reuses the Part 3 NAND2 predictions. At each corner,
+a lookup table contains the four ordered NAND input states, giving
+$4\times200=800$ entries. Each entry contains the gate's predicted supply
+leakage and the signed gate currents at its two input pins. The supply
+leakage uses the KCL method described in Section~\ref{sec:combine}.
+For a NAND input pin, its current is the sum of the gate-terminal currents
+of the PMOS and NMOS connected to that pin.
+
+For each nine-bit input vector, Boolean evaluation determines the input
+state of every NAND. The corresponding lookup entry is selected for each
+gate and the contributions are combined. The circuit estimate does not
+use node voltages from the complete-circuit SPICE simulation. However,
+the isolated-gate lookup inherits the SPICE-recorded transistor voltages
+used by Part 3; it is therefore a hierarchical approximation based on
+characterised gates.
+
+\subsection{Combining the gate contributions}
+\paragraph{Plain gate sum (baseline).}
+The prescribed hierarchical estimate adds the supply leakages of the
+32 isolated NAND gates:
+\begin{equation}
+\widehat I_{\mathrm{plain}}=\sum_{j=1}^{32}\widehat I_{\mathrm{supply},j}.
+\end{equation}
+This baseline is retained in the comparison.
+
+\paragraph{Correction for internally driven high inputs.}
+An isolated gate's input is powered by an external voltage source. Inside
+the circuit, an internal high input is instead driven by another gate,
+which must supply its input gate current. The plain sum omits this
+contribution. Under the ideal-rail approximation, the corrected estimate is
+\begin{equation}
+\widehat I_{\mathrm{corrected}}=
+\widehat I_{\mathrm{plain}}+
+\sum_{(j,q)\in\mathcal H_{\mathrm{internal}}}\widehat I_{g,jq},
+\end{equation}
+where $\mathcal H_{\mathrm{internal}}$ contains the receiving input pins
+that are high and driven by another gate. Currents are signed, positive
+into the receiving pin; their absolute values are not used. Each receiving
+pin is counted once, including when a driver has multiple loads.
+
+Primary-input currents remain excluded because their sources are separate
+from the circuit supply. A separate variant adds the currents at high
+primary inputs to both the prediction and the SPICE reference, so that the
+two sides still use the same leakage definition. The correction changes
+current accounting; it does not solve the circuit's coupled analog voltages.
+
+\subsection{Validation procedure}
+The implementation includes the following checks:
+\begin{itemize}
+\item Exhaustive Boolean evaluation of all 512 vectors, including checking
+      that flipping the parity bit flips the error output.
+\item Structural checks for an ordered, acyclic graph with 32 NAND2 gates
+      and a generated netlist containing 128 transistors.
+\item Checks of every simulated NAND output against its Boolean value,
+      primary-input voltages against their required rails, and complete
+      coverage of the corner--vector pairs.
+\item Tests of signed input-current ownership, agreement between batched
+      and individual aggregation, and rejection of missing or incorrect
+      simulation measurements.
+\item An independent operating-point versus DC-sweep comparison.
+\end{itemize}
+\noindent\textit{Final validation outcomes and simulator version: pending
+the run with consistently regenerated datasets and models.}
+
+\subsection{Results}
+For each circuit case, the relative error and signed relative error are
+\begin{equation}
+r=\frac{|\widehat I-I_{\mathrm{SPICE}}|}{|I_{\mathrm{SPICE}}|},
+\qquad
+b=\frac{\widehat I-I_{\mathrm{SPICE}}}{I_{\mathrm{SPICE}}}.
+\end{equation}
+The comparison reports median, 95th-percentile and mean relative error;
+bias is the median signed relative error. Under the project's convention,
+mean accuracy is $100(1-\operatorname{mean}(r))\%$.
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lrrrr}
+\toprule
+Estimate & Bias (\%) & Median error (\%) & p95 (\%) & Mean (\%)\\
+\midrule
+Plain gate sum & & & & \\
+Corrected supply estimate & & & & \\
+Including primary high inputs & & & & \\
+\bottomrule
+\end{tabular}
+\caption{Circuit comparison. Numerical cells are intentionally blank pending
+the final consistent run.}
+\label{tab:circuitresults}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+Quantity (supply-only comparison) & Value\\
+\midrule
+Median SPICE leakage ($\mu$A) & \\
+Median corrected ML leakage ($\mu$A) & \\
+Maximum corrected relative error (\%) & \\
+Corrected mean accuracy (\%) & \\
+\bottomrule
+\end{tabular}
+\caption{Additional circuit metrics, to be filled after the final run.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox[c][35mm][c]{0.85\linewidth}{\centering
+Pending final circuit parity plot: plain and corrected ML estimates
+against complete-circuit SPICE, with logarithmic axes.}}
+\caption{Placeholder for the final circuit leakage comparison.}
+\label{fig:circuitparity}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox[c][35mm][c]{0.85\linewidth}{\centering
+Pending final plot of corrected relative error against temperature.}}
+\caption{Placeholder for the final temperature-dependent error plot.}
+\label{fig:circuittemperature}
+\end{figure}
+
+\subsection{Worked calculation}
+For vector \texttt{000000000} at corner 0, Boolean evaluation gives eight
+NAND gates in state \texttt{00}, sixteen in \texttt{01}, none in
+\texttt{10}, and eight in \texttt{11}. Thus,
+\begin{equation}
+\widehat I_{\mathrm{plain}}=
+8\widehat I_{00}+16\widehat I_{01}+8\widehat I_{11}.
+\end{equation}
+The internal high-input currents are then added and the result is compared
+with the complete-circuit supply current.
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+Calculation step & Value\\
+\midrule
+Plain gate sum ($\mu$A) & \\
+Internal high-input correction ($\mu$A) & \\
+Corrected estimate ($\mu$A) & \\
+Complete-circuit SPICE reference ($\mu$A) & \\
+Relative error (\%) & \\
+\bottomrule
+\end{tabular}
+\caption{Worked example; numerical values await the final run.}
+\end{table}
+
+\subsection{Error analysis and limitations}
+\noindent\textit{Results-dependent discussion is pending: comparison with
+gate-level accuracy, worst corners and vectors, temperature dependence,
+and whether the mean-accuracy objective is reached.}
+
+The lookup assumes ideal input rails and isolated-gate operating points.
+In the complete circuit, fanout and departures from ideal high and low
+voltages can change leakage. The input-current correction accounts for
+internally supplied input currents but does not remove this approximation.
+The transistor models also retain prediction errors.
+
+To distinguish these effects, the same aggregation is also evaluated using
+isolated-gate SPICE currents in place of ML currents. Its disagreement with
+complete-circuit SPICE measures the error of composing isolated gates;
+comparison with the ML estimate helps assess the additional model error.
+Absolute errors from these comparisons need not add, because signed errors
+can cancel.
+
+Possible improvements include gate models conditioned on analog input
+voltages and loading, a coupled node-voltage solution, and improved
+transistor training coverage. Circuit evaluation cases must remain outside
+the training data.
+
+\subsection{Reproducibility}
+The circuit construction, simulation, comparison and validation scripts
+are provided in \texttt{part4\_circuit/}. Once the consistent upstream
+artifacts are available, \texttt{python run\_all.py --part4-only} runs the
+Part 4 tests, circuit simulation workflow and comparison. The separate
+\texttt{part4\_circuit/cross\_check.py} script performs the independent
+operating-point/DC check. Final tables, plots and validation records will
+be taken from that consistent run.
